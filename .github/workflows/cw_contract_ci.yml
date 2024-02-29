@@ -1,0 +1,52 @@
+name: Contract
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "**"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "**"
+
+env:
+  CARGO_TERM_COLOR: always
+  CONTRACT_ROOT: .
+
+jobs:
+  code_quality:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Rust environment
+      run: |
+        rustup target add wasm32-unknown-unknown
+    - name: Build
+      run: |
+        cd ${CONTRACT_ROOT}
+        cargo build
+    - name: Style checks
+      run: |
+        cd ${CONTRACT_ROOT}
+        cargo fmt --all -- --check
+    - name: Linter checks
+      run: |
+        cd ${CONTRACT_ROOT}
+        cargo clippy -- -D warnings
+  
+  unit_tests:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Rust environment
+      run: |
+        rustup target add wasm32-unknown-unknown
+    - name: Run tests
+      run: |
+        cd ${CONTRACT_ROOT}
+        cargo test --verbose
