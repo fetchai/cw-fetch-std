@@ -9,7 +9,7 @@ pub fn is_super_admin(deps: &Deps, env: &Env, address: &Addr) -> StdResult<bool>
         .query_wasm_contract_info(&env.contract.address)?
         .admin
     {
-        return Ok(address == &Addr::unchecked(admin_address));
+        return Ok(address == Addr::unchecked(admin_address));
     }
     Ok(false)
 }

@@ -1,4 +1,3 @@
-use crate::storage::parentable::{get_inherited, Parentable};
 use cosmwasm_std::{Order, StdResult, Storage};
 use cw_storage_plus::{Key, Path, Prefix, PrimaryKey};
 use std::marker::PhantomData;
@@ -57,24 +56,5 @@ where
 
     fn no_prefix(&self) -> Prefix<K, (), K> {
         Prefix::new(self.namespace, &[])
-    }
-}
-
-impl<'a, K> StorageSet<'a, K>
-where
-    K: PrimaryKey<'a> + Parentable,
-{
-    pub fn has_inherited(&self, store: &dyn Storage, key: &K) -> StdResult<bool> {
-        // Create a function that can be passed to get_inherited which returns StdResult<Option<T>> instead of just StdResult<T>
-        let store_get_fn = |storage: &dyn Storage, domain: &K| -> StdResult<Option<bool>> {
-            if self.has(storage, domain) {
-                Ok(Some(true))
-            } else {
-                Ok(None)
-            }
-        };
-
-        // Get domain state inherited from parent domains if any
-        Ok(get_inherited(store, key.clone(), store_get_fn)?.unwrap_or(false))
     }
 }
