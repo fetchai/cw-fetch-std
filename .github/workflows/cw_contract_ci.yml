@@ -1,0 +1,82 @@
+name: Contract
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "**"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "**"
+
+env:
+  CARGO_TERM_COLOR: always
+  CONTRACT_ROOT: .
+
+jobs:
+  code_quality:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Rust environment
+      run: |
+        rustup target add wasm32-unknown-unknown
+    - name: Build
+      run: |
+        cd ${CONTRACT_ROOT}
+        RUSTFLAGS='-C link-arg=-s --deny warnings' cargo wasm --verbose
+    - name: Style checks
+      run: |
+        cd ${CONTRACT_ROOT}
+        cargo fmt --all -- --check
+    - name: Linter checks
+      run: |
+        cd ${CONTRACT_ROOT}
+        cargo clippy -- -D warnings
+  
+  unit_tests:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Rust environment
+      run: |
+        rustup target add wasm32-unknown-unknown
+    - name: Build
+      run: |
+        cd ${CONTRACT_ROOT}
+        RUSTFLAGS='-C link-arg=-s --deny warnings' cargo wasm --verbose
+    - name: Run tests
+      run: |
+        cd ${CONTRACT_ROOT}
+        cargo test --verbose
+  
+  code_coverage:
+
+    if: ${{ false }}  # disable for now
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Rust environment
+      run: |
+        rustup target add wasm32-unknown-unknown
+    - name: Install cargo-make
+      uses: actions-rs/cargo@v1
+      with:
+        command: install
+        args: --debug cargo-make
+    - name: Compile tests
+      run: |
+        cd ${CONTRACT_ROOT}
+        RUSTFLAGS='-C link-arg=-s --deny warnings -C link-dead-code' cargo wasm --verbose
+        RUSTFLAGS='-C link-dead-code' cargo test --no-run
+    - name: Run Coverage
+      run: cargo make coverage-kcov
+      # TODO(LR) https://github.com/fetchai/contract-agent-almanac/issues/3
+      # upload coverage information to codecov and check if decreased
+      working-directory: ${CONTRACT_ROOT}
