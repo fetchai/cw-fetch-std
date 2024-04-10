@@ -12,13 +12,17 @@ pub type EthAddress = [u8; 20];
 ///
 /// * `msg` - The message to wrap
 ///
-fn build_eth_signed_msg_wrapper(msg: &str) -> String {
-    format!("\x19Ethereum Signed Message:\n{}{}", msg.len(), msg)
+fn build_eth_msg_for_signing(canonical_msg: &str) -> String {
+    format!(
+        "\x19Ethereum Signed Message:\n{}{}",
+        canonical_msg.len(),
+        canonical_msg
+    )
 }
 
 /// Computes the message and digest that should be signed by the user
-pub fn compute_eth_digest(msg: &str) -> KeccakDigest {
-    let wrapped = build_eth_signed_msg_wrapper(msg);
+pub fn compute_eth_msg_digest(canonical_msg: &str) -> KeccakDigest {
+    let wrapped = build_eth_msg_for_signing(canonical_msg);
     keccak(wrapped.as_bytes())
 }
 
@@ -113,7 +117,7 @@ pub fn check_registration(
     // compute the expected message and then the digest for it
 
     let msg = format!("Associate {} with {}", destination_address, eth_address);
-    let msg_hash = compute_eth_digest(&msg);
+    let msg_hash = compute_eth_msg_digest(&msg);
 
     let recovered_public_key = recover_pubkey(api, &msg_hash, signature)?;
     let recovered_address = pubkey_to_eth_address(&recovered_public_key)?;
@@ -164,7 +168,7 @@ pub fn addresses_error<T: std::fmt::Display>(err: &T) -> StdError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::cosmos::pubkey_to_cosmos_address;
+    use crate::crypto::cosmos::cosmos_address_from_pubkey;
     use crate::crypto::hashing::compress_key;
     use cosmwasm_std::testing::mock_dependencies;
 
@@ -179,7 +183,7 @@ mod tests {
 
     #[test]
     fn it_wraps_eth_sign_messages() {
-        let wrapped = build_eth_signed_msg_wrapper("why hello there");
+        let wrapped = build_eth_msg_for_signing("why hello there");
         assert_eq!(&wrapped, "\x19Ethereum Signed Message:\n15why hello there")
     }
 
@@ -188,7 +192,7 @@ mod tests {
         let native = Addr::unchecked("native-address");
 
         let msg = format!("Associate {} with {}", &native, "eth-address");
-        let result = compute_eth_digest(&msg);
+        let result = compute_eth_msg_digest(&msg);
 
         assert_eq!(
             hex::encode(result),
@@ -284,7 +288,7 @@ mod tests {
 
         let compressed_pubkey = compress_key(&eth_pubkey).unwrap();
 
-        let fetch_address = pubkey_to_cosmos_address(&compressed_pubkey, "fetch");
+        let fetch_address = cosmos_address_from_pubkey(&compressed_pubkey, "fetch");
         assert_eq!(fetch_address, expected_fetch_address);
     }
 }
