@@ -128,27 +128,6 @@ pub fn check_registration(
     Ok(address)
 }
 
-pub fn compress_key(uncompressed_pubkey_bytes: &[u8]) -> Result<Vec<u8>, StdError> {
-    if uncompressed_pubkey_bytes.len() != 64 {
-        return Err(pubkey_error(&"Wrong len"));
-    }
-
-    // The first byte is the prefix, followed by 32 bytes for X and 32 bytes for Y
-    let x_bytes = &uncompressed_pubkey_bytes[0..32];
-    let y_bytes = &uncompressed_pubkey_bytes[32..64];
-
-    // Determine if Y is even or odd for the prefix
-    // Y's last byte's least significant bit determines its evenness or oddness
-    let prefix_byte = if y_bytes[31] & 1 == 0 { 0x02 } else { 0x03 };
-
-    // Create the compressed public key
-    let mut compressed_pubkey: Vec<u8> = Vec::with_capacity(33);
-    compressed_pubkey.push(prefix_byte);
-    compressed_pubkey.extend_from_slice(x_bytes);
-
-    Ok(compressed_pubkey)
-}
-
 pub fn recover_pubkey(
     api: &dyn Api,
     msg_hash: &[u8],
@@ -190,6 +169,7 @@ pub fn pubkey_error<T: std::fmt::Display>(err: &T) -> StdError {
 mod tests {
     use super::*;
     use crate::crypto::cosmos::pubkey_to_address;
+    use crate::crypto::hashing::compress_key;
     use cosmwasm_std::testing::mock_dependencies;
 
     #[test]
