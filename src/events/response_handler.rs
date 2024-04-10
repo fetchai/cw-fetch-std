@@ -1,5 +1,5 @@
 use crate::events::IntoEvent;
-use cosmwasm_std::Response;
+use cosmwasm_std::{CosmosMsg, Response, SubMsg};
 
 pub struct ResponseHandler {
     response: Response,
@@ -8,6 +8,10 @@ pub struct ResponseHandler {
 impl ResponseHandler {
     pub fn add_event<T: IntoEvent>(&mut self, event: T) {
         self.response.events.push(event.into_event());
+    }
+
+    pub fn add_msg(&mut self, msg: impl Into<CosmosMsg>) {
+        self.response.messages.push(SubMsg::new(msg));
     }
 
     pub fn into_response(self) -> Response {
