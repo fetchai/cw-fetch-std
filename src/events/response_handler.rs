@@ -1,5 +1,5 @@
 use crate::events::IntoEvent;
-use cosmwasm_std::{CosmosMsg, Response, SubMsg};
+use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg, Response, SubMsg};
 
 pub struct ResponseHandler {
     response: Response,
@@ -16,6 +16,13 @@ impl ResponseHandler {
 
     pub fn into_response(self) -> Response {
         self.response
+    }
+
+    pub fn add_bank_send_msg(&mut self, to_addr: &Addr, amount: Vec<Coin>) {
+        self.add_msg(BankMsg::Send {
+            to_address: to_addr.to_string(),
+            amount,
+        })
     }
 }
 
