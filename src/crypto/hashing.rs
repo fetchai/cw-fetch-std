@@ -1,4 +1,3 @@
-use crate::crypto::ethereum::pubkey_error;
 use cosmwasm_std::StdError;
 use ripemd::Ripemd160;
 use sha2::{Digest, Sha256};
@@ -53,4 +52,9 @@ pub fn compress_key(uncompressed_pubkey_bytes: &[u8]) -> Result<Vec<u8>, StdErro
     compressed_pubkey.extend_from_slice(x_bytes);
 
     Ok(compressed_pubkey)
+}
+
+// Error
+pub fn pubkey_error<T: std::fmt::Display>(err: &T) -> StdError {
+    StdError::generic_err(format!("Eth pubkey error {}", err))
 }

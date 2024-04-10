@@ -17,7 +17,7 @@ fn build_eth_signed_msg_wrapper(msg: &str) -> String {
 }
 
 /// Computes the message and digest that should be signed by the user
-fn compute_digest(msg: &str) -> KeccakDigest {
+pub fn compute_eth_digest(msg: &str) -> KeccakDigest {
     let wrapped = build_eth_signed_msg_wrapper(msg);
     keccak(wrapped.as_bytes())
 }
@@ -66,7 +66,7 @@ pub fn parse_eth_address(eth_address: &str) -> Result<EthAddress, StdError> {
 ///
 /// * `signature` - The base64 encoded ETH style signature
 ///
-fn parse_signature(signature: &str) -> Result<(u8, Vec<u8>), StdError> {
+fn parse_eth_signature(signature: &str) -> Result<(u8, Vec<u8>), StdError> {
     let mut unpacked_signature = general_purpose::STANDARD
         .decode(signature)
         .map_err(|err| signature_error(&err))?;
@@ -113,7 +113,7 @@ pub fn check_registration(
     // compute the expected message and then the digest for it
 
     let msg = format!("Associate {} with {}", destination_address, eth_address);
-    let msg_hash = compute_digest(&msg);
+    let msg_hash = compute_eth_digest(&msg);
 
     let recovered_public_key = recover_pubkey(api, &msg_hash, signature)?;
     let recovered_address = pubkey_to_eth_address(&recovered_public_key)?;
@@ -134,7 +134,7 @@ pub fn recover_pubkey(
     signature: &str,
 ) -> Result<Vec<u8>, StdError> {
     // parse the eth style signature, extracting the recovery param from r and s
-    let (recovery_param, raw_signature) = parse_signature(signature)?;
+    let (recovery_param, raw_signature) = parse_eth_signature(signature)?;
 
     // recover the public key from the signature
     let recovered_public_key = api
@@ -161,14 +161,10 @@ pub fn addresses_error<T: std::fmt::Display>(err: &T) -> StdError {
     StdError::generic_err(format!("Eth address error {}", err))
 }
 
-pub fn pubkey_error<T: std::fmt::Display>(err: &T) -> StdError {
-    StdError::generic_err(format!("Eth pubkey error {}", err))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::cosmos::pubkey_to_address;
+    use crate::crypto::cosmos::pubkey_to_cosmos_address;
     use crate::crypto::hashing::compress_key;
     use cosmwasm_std::testing::mock_dependencies;
 
@@ -192,7 +188,7 @@ mod tests {
         let native = Addr::unchecked("native-address");
 
         let msg = format!("Associate {} with {}", &native, "eth-address");
-        let result = compute_digest(&msg);
+        let result = compute_eth_digest(&msg);
 
         assert_eq!(
             hex::encode(result),
@@ -202,30 +198,30 @@ mod tests {
 
     #[test]
     fn it_doesnt_parse_bad_signatures() {
-        assert!(parse_signature("asdfasdfasdf").is_err());
-        assert!(parse_signature("AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIzNDU2Nzg5QEFCQ0RFRkdISVBRUlNUVVZXWFlgYWJjZB0=").is_err()); // rc 2
-        assert!(parse_signature("AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIzNDU2Nzg5QEFCQ0RFRkdISVBRUlNUVVZXWFlgYWJjZB4=").is_err());
+        assert!(parse_eth_signature("asdfasdfasdf").is_err());
+        assert!(parse_eth_signature("AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIzNDU2Nzg5QEFCQ0RFRkdISVBRUlNUVVZXWFlgYWJjZB0=").is_err()); // rc 2
+        assert!(parse_eth_signature("AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIzNDU2Nzg5QEFCQ0RFRkdISVBRUlNUVVZXWFlgYWJjZB4=").is_err());
         // rc 3
     }
 
     #[test]
     fn it_does_parse_good_signatures() {
-        let (rc, sig) = parse_signature("AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIzNDU2Nzg5QEFCQ0RFRkdISVBRUlNUVVZXWFlgYWJjZBs=").unwrap();
+        let (rc, sig) = parse_eth_signature("AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIzNDU2Nzg5QEFCQ0RFRkdISVBRUlNUVVZXWFlgYWJjZBs=").unwrap();
         assert_eq!(rc, 0u8);
         assert_eq!(hex::encode(&sig), "01020304050607080910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758596061626364");
 
-        let (rc, sig) = parse_signature("AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIzNDU2Nzg5QEFCQ0RFRkdISVBRUlNUVVZXWFlgYWJjZBw=").unwrap();
+        let (rc, sig) = parse_eth_signature("AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIzNDU2Nzg5QEFCQ0RFRkdISVBRUlNUVVZXWFlgYWJjZBw=").unwrap();
         assert_eq!(rc, 1u8);
         assert_eq!(hex::encode(&sig), "01020304050607080910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758596061626364");
     }
 
     #[test]
     fn it_does_parse_ledger_style_signatures() {
-        let (rc, sig) = parse_signature("AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QAA=").unwrap();
+        let (rc, sig) = parse_eth_signature("AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QAA=").unwrap();
         assert_eq!(rc, 0u8);
         assert_eq!(hex::encode(&sig), "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40");
 
-        let (rc, sig) = parse_signature("AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QAE=").unwrap();
+        let (rc, sig) = parse_eth_signature("AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QAE=").unwrap();
         assert_eq!(rc, 1u8);
         assert_eq!(hex::encode(&sig), "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40");
     }
@@ -288,7 +284,7 @@ mod tests {
 
         let compressed_pubkey = compress_key(&eth_pubkey).unwrap();
 
-        let fetch_address = pubkey_to_address(&compressed_pubkey, "fetch");
+        let fetch_address = pubkey_to_cosmos_address(&compressed_pubkey, "fetch");
         assert_eq!(fetch_address, expected_fetch_address);
     }
 }
