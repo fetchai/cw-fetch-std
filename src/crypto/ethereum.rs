@@ -119,7 +119,7 @@ pub fn check_registration(
     let msg = format!("Associate {} with {}", destination_address, eth_address);
     let msg_hash = compute_eth_msg_digest(&msg);
 
-    let recovered_public_key = recover_pubkey(api, &msg_hash, signature)?;
+    let recovered_public_key = recover_pubkey_secp256k1(api, &msg_hash, signature)?;
     let recovered_address = pubkey_to_eth_address(&recovered_public_key)?;
 
     let address = parse_eth_address(eth_address)?;
@@ -132,7 +132,7 @@ pub fn check_registration(
     Ok(address)
 }
 
-pub fn recover_pubkey(
+pub fn recover_pubkey_secp256k1(
     api: &dyn Api,
     msg_hash: &[u8],
     signature: &str,
