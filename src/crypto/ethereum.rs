@@ -169,7 +169,7 @@ pub fn addresses_error<T: std::fmt::Display>(err: &T) -> StdError {
 mod tests {
     use super::*;
     use crate::crypto::cosmos::cosmos_address_from_pubkey;
-    use crate::crypto::hashing::compress_key;
+    use crate::crypto::hashing::compress_pubkey_secp256k1;
     use cosmwasm_std::testing::mock_dependencies;
 
     #[test]
@@ -286,7 +286,7 @@ mod tests {
         let eth_pubkey =  hex::decode("5c084296dfaeaf815a3a7e4e8688ed4140e403f1cd2d2f545c7a3822007763ae0e547eb989d5eecbfc5acd0204531b38e3bcfab232c506db7a9353d68932ca61").unwrap();
         let expected_fetch_address = "fetch1e6lpplutmnxae8u7le9xsr7r9r4y9rukaf4lx8";
 
-        let compressed_pubkey = compress_key(&eth_pubkey).unwrap();
+        let compressed_pubkey = compress_pubkey_secp256k1(&eth_pubkey).unwrap();
 
         let fetch_address = cosmos_address_from_pubkey(&compressed_pubkey, "fetch");
         assert_eq!(fetch_address, expected_fetch_address);

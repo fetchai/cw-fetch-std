@@ -33,7 +33,7 @@ pub fn ripemd160(data: &[u8]) -> Vec<u8> {
     ripemd160.finalize().to_vec()
 }
 
-pub fn compress_key(uncompressed_pubkey_bytes: &[u8]) -> Result<Vec<u8>, StdError> {
+pub fn compress_pubkey_secp256k1(uncompressed_pubkey_bytes: &[u8]) -> Result<Vec<u8>, StdError> {
     if uncompressed_pubkey_bytes.len() != 64 {
         return Err(pubkey_error(&"Wrong len"));
     }
@@ -44,7 +44,7 @@ pub fn compress_key(uncompressed_pubkey_bytes: &[u8]) -> Result<Vec<u8>, StdErro
 
     // Determine if Y is even or odd for the prefix
     // Y's last byte's least significant bit determines its evenness or oddness
-    let prefix_byte = if y_bytes[31] & 1 == 0 { 0x02 } else { 0x03 };
+    let prefix_byte = if (y_bytes[31] & 1) == 0 { 0x02 } else { 0x03 };
 
     // Create the compressed public key
     let mut compressed_pubkey: Vec<u8> = Vec::with_capacity(33);
