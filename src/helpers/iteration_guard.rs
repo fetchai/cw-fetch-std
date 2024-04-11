@@ -75,7 +75,7 @@ impl IterationGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::helpers::IterationResult::{Done, Stopped};
+    use crate::helpers::iteration_guard::IterationResult::{Done, Stopped};
 
     #[test]
     fn iteration_gurad() {
