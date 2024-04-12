@@ -13,7 +13,7 @@ pub fn deps_with_creator(
     let mut querier = MockQuerier::default();
     querier.update_wasm(move |request| match request {
         WasmQuery::ContractInfo { contract_addr } => {
-            if *contract_addr == contract_address {
+            if contract_addr == contract_address.as_str() {
                 let mut response = ContractInfoResponse::default();
                 response.admin = Some(creator.to_string());
                 SystemResult::Ok(StdContractResult::Ok(to_json_binary(&response).unwrap()))
