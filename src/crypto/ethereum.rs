@@ -81,7 +81,8 @@ fn parse_eth_signature(signature: &str) -> Result<(u8, Vec<u8>), StdError> {
     // extract the recovery code
     let mut recovery_code = unpacked_signature
         .pop()
-        .ok_or(signature_error(&"Wrong recovery code"))?;
+        .ok_or_else(|| signature_error(&"Wrong recovery code"))?;
+
     if recovery_code >= 27u8 {
         recovery_code -= 27u8;
     }
