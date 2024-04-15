@@ -32,7 +32,7 @@ pub fn deps_with_creator(
     deps
 }
 
-pub fn assert_err<T, E: std::fmt::Debug>(result: Result<T, E>, error: &E) {
+pub fn assert_err<T, E: std::fmt::Debug, F: std::fmt::Debug>(result: Result<T, E>, error: &F) {
     // Check if result contains specific error
     match result {
         Ok(_) => panic!("Expected Err, got Ok"),
