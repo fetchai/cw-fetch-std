@@ -1,8 +1,8 @@
-use cosmwasm_std::{Env, StdError, StdResult, Storage};
+use crate::events::ResponseHandler;
+use crate::pausing::contract_paused_error;
+use crate::pausing::events::{ContractPausedEvent, ContractResumedEvent};
+use cosmwasm_std::{Env, StdResult, Storage};
 use cw_storage_plus::Item;
-
-// api paused
-const ERR_CONTRACT_PAUSED: &str = "[FET_ERR_CONTRACT_PAUSED] Contract is paused";
 
 const PAUSED_SINCE_BLOCK: Item<u64> = Item::new("paused_since");
 
@@ -10,11 +10,19 @@ pub fn is_paused_since_block(storage: &dyn Storage) -> StdResult<Option<u64>> {
     PAUSED_SINCE_BLOCK.may_load(storage)
 }
 
-pub fn pause_contract(storage: &mut dyn Storage, since_block: u64) -> StdResult<()> {
+pub fn pause_contract(
+    storage: &mut dyn Storage,
+    response_handler: &mut ResponseHandler,
+    since_block: u64,
+) -> StdResult<()> {
+    response_handler.add_event(ContractPausedEvent {
+        since_block: &since_block,
+    });
     PAUSED_SINCE_BLOCK.save(storage, &since_block)
 }
 
-pub fn resume_contract(storage: &mut dyn Storage) {
+pub fn resume_contract(storage: &mut dyn Storage, response_handler: &mut ResponseHandler) {
+    response_handler.add_event(ContractResumedEvent {});
     PAUSED_SINCE_BLOCK.remove(storage)
 }
 
@@ -26,10 +34,6 @@ pub fn ensure_not_paused(storage: &dyn Storage, env: &Env) -> StdResult<()> {
         }
     }
     Ok(())
-}
-
-pub fn contract_paused_error() -> StdError {
-    StdError::generic_err(ERR_CONTRACT_PAUSED)
 }
 
 #[cfg(test)]
@@ -52,7 +56,12 @@ mod tests {
         );
 
         // Pause contract
-        assert!(pause_contract(deps.as_mut().storage, pause_height).is_ok());
+        assert!(pause_contract(
+            deps.as_mut().storage,
+            &mut ResponseHandler::default(),
+            pause_height
+        )
+        .is_ok());
 
         // Contract is paused
         assert_eq!(
@@ -80,7 +89,7 @@ mod tests {
         );
 
         // Resume contract
-        resume_contract(deps.as_mut().storage);
+        resume_contract(deps.as_mut().storage, &mut ResponseHandler::default());
 
         // Contract is resumed
         assert!(is_paused_since_block(deps.as_ref().storage)
