@@ -1,6 +1,6 @@
-use cosmwasm_std::testing::{mock_dependencies, MockApi, MockQuerier, MockStorage};
+use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
 use cosmwasm_std::{
-    to_json_binary, Addr, ContractInfoResponse, Empty, OwnedDeps, SystemError, SystemResult,
+    to_json_binary, Addr, ContractInfoResponse, Empty, Env, OwnedDeps, SystemError, SystemResult,
     WasmQuery,
 };
 use cosmwasm_std::{BankMsg, Coin, ContractResult as StdContractResult, Response, SubMsg, Uint128};
@@ -50,4 +50,10 @@ pub fn assert_transfer(res: &Response, address: &Addr, amount: &u128, denom: &st
     });
 
     assert_eq!(res.messages[0], send_msg);
+}
+
+pub fn mock_env_with_height(height: u64) -> Env {
+    let mut env = mock_env();
+    env.block.height = height;
+    env
 }
