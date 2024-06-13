@@ -1,5 +1,6 @@
 use cosmwasm_std::{Coin, StdError, StdResult, Uint128};
 use std::collections::btree_map::Entry;
+use std::collections::btree_map::OccupiedEntry;
 use std::collections::BTreeMap;
 
 pub trait BTreeMapCoinHelpers {
@@ -64,8 +65,13 @@ impl BTreeMapCoinHelpers for BTreeMap<String, Uint128> {
 
 pub trait VecCoinConversions {
     fn to_tuple_iterator<'a>(&'a self) -> Box<dyn Iterator<Item = (&'a String, &'a Uint128)> + 'a>;
-    fn into_map(self) -> BTreeMap<String, Uint128>;
-    fn into_map_unique(self) -> StdResult<BTreeMap<String, Uint128>>;
+    fn into_map_with_duplicities<F>(
+        self,
+        handle_duplicate: F,
+    ) -> StdResult<BTreeMap<String, Uint128>>
+    where
+        F: Fn(OccupiedEntry<String, Uint128>, Uint128) -> StdResult<()>;
+    fn into_map(self) -> StdResult<BTreeMap<String, Uint128>>;
     fn to_formatted_string(&self) -> String;
 }
 
@@ -74,21 +80,13 @@ impl VecCoinConversions for Vec<Coin> {
         Box::new(self.iter().map(|coin| (&coin.denom, &coin.amount)))
     }
 
-    fn into_map(self) -> BTreeMap<String, Uint128> {
-        let mut denom_map = BTreeMap::new();
-
-        for coin in self {
-            if let Some(counter) = denom_map.get_mut(&coin.denom) {
-                *counter += coin.amount;
-            } else {
-                denom_map.insert(coin.denom, coin.amount);
-            }
-        }
-
-        denom_map
-    }
-
-    fn into_map_unique(self) -> StdResult<BTreeMap<String, Uint128>> {
+    fn into_map_with_duplicities<F>(
+        self,
+        handle_duplicate: F,
+    ) -> StdResult<BTreeMap<String, Uint128>>
+    where
+        F: Fn(OccupiedEntry<String, Uint128>, Uint128) -> StdResult<()>,
+    {
         let mut denom_map = BTreeMap::new();
 
         for coin in self {
@@ -97,15 +95,21 @@ impl VecCoinConversions for Vec<Coin> {
                     e.insert(coin.amount);
                 }
                 Entry::Occupied(e) => {
-                    return Err(StdError::generic_err(format!(
-                        "Duplicate denom found: {}",
-                        e.key()
-                    )));
+                    handle_duplicate(e, coin.amount)?;
                 }
             }
         }
 
         Ok(denom_map)
+    }
+
+    fn into_map(self) -> StdResult<BTreeMap<String, Uint128>> {
+        self.into_map_with_duplicities(|e, _| {
+            Err(StdError::generic_err(format!(
+                "Duplicate denom found: {}",
+                e.key()
+            )))
+        })
     }
 
     fn to_formatted_string(&self) -> String {
@@ -194,7 +198,9 @@ mod tests {
     #[test]
     fn test_into_map() {
         let vec = vec![coin(100, "atom"), coin(50, "btc"), coin(50, "btc")];
-        let map = vec.into_map();
+        let map = vec
+            .into_map_with_duplicities(|mut e, new_value| Ok(*e.get_mut() += new_value))
+            .unwrap();
 
         assert_eq!(map.get("atom"), Some(&Uint128::new(100)));
         assert_eq!(map.get("btc"), Some(&Uint128::new(100)));
@@ -274,7 +280,7 @@ mod tests {
         let sorted_keys: Vec<String> = sorted_coins.iter().map(|res| res.denom.clone()).collect();
 
         // Convert vector of coins into map
-        let map = coins.into_map();
+        let map = coins.into_map().unwrap();
 
         // Ensure that keys in map are sorted
         let keys: Vec<_> = map.keys().cloned().collect();
@@ -296,11 +302,14 @@ mod tests {
 
         // Resulting maps are equivalent if there is no duplicity
         assert_eq!(
-            coins.clone().into_map_unique().unwrap(),
-            coins.clone().into_map()
+            coins.clone().into_map().unwrap(),
+            coins
+                .clone()
+                .into_map_with_duplicities(|mut e, b| { Ok(*e.get_mut() = b) })
+                .unwrap()
         );
 
-        let result = coins.into_map_unique();
+        let result = coins.into_map();
         assert!(result.is_ok());
 
         let map = result.unwrap();
@@ -333,7 +342,7 @@ mod tests {
             coin(75, "eth"),  // Duplicate denom
         ];
 
-        let result = coins.into_map_unique();
+        let result = coins.into_map();
         assert!(result.is_err());
 
         if let Err(err) = result {
@@ -345,7 +354,7 @@ mod tests {
     fn test_vec_of_coins_into_btreemap_unique_with_empty_vec() {
         let coins: Vec<Coin> = vec![];
 
-        let result = coins.into_map_unique();
+        let result = coins.into_map();
         assert!(result.is_ok());
 
         let map = result.unwrap();
