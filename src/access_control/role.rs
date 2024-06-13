@@ -11,7 +11,8 @@ bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
  */
 
-use cosmwasm_std::{Addr, StdResult, Storage};
+use crate::permissions::is_super_admin;
+use cosmwasm_std::{Addr, Deps, DepsMut, Env, StdError, StdResult, Storage};
 use cw_storage_plus::Map;
 use std::marker::PhantomData;
 
@@ -35,13 +36,80 @@ impl<T: std::fmt::Display> AccessControl<T> {
     pub fn has_role(storage: &dyn Storage, role: &T, address: &Addr) -> bool {
         HAS_ROLE.has(storage, (&role.to_string(), address))
     }
+
+    pub fn ensure_role_admin(deps: &Deps, env: &Env, sender: &Addr, role: &T) -> StdResult<()> {
+        let role_admin = Self::get_role_admin(deps.storage, role)?
+            .ok_or(StdError::generic_err(format!("No admin for role {}", role)))?;
+        if role_admin != sender && !is_super_admin(deps, env, sender)? {
+            return Err(StdError::generic_err(format!(
+                "Sender is not admin of role {}",
+                role
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn give_role(
+        deps: &mut DepsMut,
+        env: &Env,
+        sender: &Addr,
+        role: &T,
+        address: &Addr,
+    ) -> StdResult<()> {
+        Self::ensure_role_admin(&deps.as_ref(), env, sender, role)?;
+
+        HAS_ROLE.save(deps.storage, (&role.to_string(), address), &())?;
+        Ok(())
+    }
+
+    pub fn remove_role(
+        deps: &mut DepsMut,
+        env: &Env,
+        sender: &Addr,
+        role: &T,
+        address: &Addr,
+    ) -> StdResult<()> {
+        Self::ensure_role_admin(&deps.as_ref(), env, sender, role)?;
+
+        HAS_ROLE.remove(deps.storage, (&role.to_string(), address));
+        Ok(())
+    }
+
+    pub fn create_role(storage: &mut dyn Storage, sender: &Addr, role: &T) -> StdResult<()> {
+        if Self::role_exists(storage, role)? {
+            return Err(StdError::generic_err(format!(
+                "Role {} already exist",
+                role
+            )));
+        }
+
+        Self::_set_role_admin(storage, role, sender)?;
+
+        Ok(())
+    }
+
+    pub fn change_role_admin(
+        deps: DepsMut,
+        env: &Env,
+        sender: &Addr,
+        role: &T,
+        new_admin: &Addr,
+    ) -> StdResult<()> {
+        Self::ensure_role_admin(&deps.as_ref(), env, sender, role)?;
+        Self::_set_role_admin(deps.storage, role, new_admin)
+    }
+
+    pub fn role_exists(storage: &dyn Storage, role: &T) -> StdResult<bool> {
+        Ok(Self::get_role_admin(storage, role)?.is_some())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::helpers::deps_with_creator;
     use cosmwasm_schema::cw_serde;
-    use cosmwasm_std::testing::mock_dependencies;
+    use cosmwasm_std::testing::{mock_dependencies, mock_env};
     use std::fmt;
 
     #[cw_serde]
@@ -85,5 +153,154 @@ mod tests {
                 .unwrap(),
             &creator
         );
+    }
+
+    #[test]
+    fn test_create_role() {
+        let mut deps = mock_dependencies();
+        let creator = Addr::unchecked("owner".to_string());
+        let role = TestRole::RoleA;
+
+        // Ensure the role does not exist initially
+        assert!(!AccessControl::role_exists(deps.as_mut().storage, &role).unwrap());
+
+        // Create the role
+        assert!(AccessControl::create_role(deps.as_mut().storage, &creator, &role).is_ok());
+
+        // Ensure the role admin is set correctly
+        assert_eq!(
+            &AccessControl::get_role_admin(deps.as_mut().storage, &role)
+                .unwrap()
+                .unwrap(),
+            &creator
+        );
+
+        // Trying to create the same role again should fail
+        assert!(AccessControl::create_role(deps.as_mut().storage, &creator, &role).is_err());
+    }
+
+    #[test]
+    fn test_give_role() {
+        let mut deps = mock_dependencies();
+        let env = mock_env();
+        let creator = Addr::unchecked("owner".to_string());
+
+        let user = Addr::unchecked("user".to_string());
+        let role = TestRole::RoleA;
+
+        // Create the role and set admin
+        assert!(AccessControl::create_role(deps.as_mut().storage, &creator, &role).is_ok());
+
+        // Admin should be able to give role
+        assert!(AccessControl::give_role(&mut deps.as_mut(), &env, &creator, &role, &user).is_ok());
+
+        // Ensure the user has the role
+        assert!(AccessControl::has_role(deps.as_mut().storage, &role, &user));
+    }
+
+    #[test]
+    fn test_remove_role() {
+        let mut deps = mock_dependencies();
+        let env = mock_env();
+        let creator = Addr::unchecked("owner".to_string());
+        let user = Addr::unchecked("user".to_string());
+        let role = TestRole::RoleA;
+
+        // Create the role and set admin
+        assert!(AccessControl::create_role(deps.as_mut().storage, &creator, &role).is_ok());
+
+        // Admin should be able to give role
+        assert!(AccessControl::give_role(&mut deps.as_mut(), &env, &creator, &role, &user).is_ok());
+
+        // Ensure the user has the role
+        assert!(AccessControl::has_role(deps.as_mut().storage, &role, &user));
+
+        // Admin should be able to remove role
+        assert!(
+            AccessControl::remove_role(&mut deps.as_mut(), &env, &creator, &role, &user).is_ok()
+        );
+
+        // Ensure the user no longer has the role
+        assert!(!AccessControl::has_role(
+            deps.as_mut().storage,
+            &role,
+            &user
+        ));
+    }
+
+    #[test]
+    fn test_change_role_admin() {
+        let mut deps = mock_dependencies();
+        let env = mock_env();
+        let creator = Addr::unchecked("owner".to_string());
+        let new_admin = Addr::unchecked("new_admin".to_string());
+        let role = TestRole::RoleA;
+
+        // Create the role and set admin
+        assert!(AccessControl::create_role(deps.as_mut().storage, &creator, &role).is_ok());
+
+        // Ensure the role admin is set correctly
+        assert_eq!(
+            &AccessControl::get_role_admin(deps.as_mut().storage, &role)
+                .unwrap()
+                .unwrap(),
+            &creator
+        );
+
+        // Change the role admin
+        assert!(
+            AccessControl::change_role_admin(deps.as_mut(), &env, &creator, &role, &new_admin)
+                .is_ok()
+        );
+
+        // Ensure the new role admin is set correctly
+        assert_eq!(
+            &AccessControl::get_role_admin(deps.as_mut().storage, &role)
+                .unwrap()
+                .unwrap(),
+            &new_admin
+        );
+    }
+
+    #[test]
+    fn test_ensure_role_admin() {
+        let mut deps = mock_dependencies();
+        let env = mock_env();
+        let creator = Addr::unchecked("owner".to_string());
+        let other = Addr::unchecked("other".to_string());
+        let role = TestRole::RoleA;
+
+        // Create the role and set admin
+        assert!(AccessControl::create_role(deps.as_mut().storage, &creator, &role).is_ok());
+
+        // Ensure role admin passes for the correct admin
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &creator, &role).is_ok());
+
+        // Ensure role admin fails for someone who is not the admin
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &other, &role).is_err());
+    }
+
+    #[test]
+    fn test_super_admin() {
+        let creator = Addr::unchecked("owner".to_string());
+        let role_admin = Addr::unchecked("role_admin".to_string());
+        let other = Addr::unchecked("other".to_string());
+
+        let role = TestRole::RoleA;
+
+        let env = mock_env();
+        let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
+
+        // Create the role and set admin
+        assert!(AccessControl::create_role(deps.as_mut().storage, &role_admin, &role).is_ok());
+
+        // Ensure role admin passes for the correct admin
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &role_admin, &role).is_ok());
+
+        // Ensure super-admin is also role admin
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &creator, &role).is_ok());
+
+        // Ensure role admin fails for someone who is not the admin
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &other, &role).is_err());
     }
 }
