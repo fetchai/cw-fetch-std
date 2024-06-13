@@ -1,18 +1,24 @@
 use bech32::{FromBase32, ToBase32};
 use cosmwasm_std::StdError;
 
-pub fn parse_bech32(data: &str, expected_prefix: &str) -> Result<Vec<u8>, StdError> {
-    let (prefix, parsed_data, _variant) = match bech32::decode(data) {
-        Ok(parsed_data) => Ok(parsed_data),
-        Err(err) => Err(base32_parsing_error(&err)),
-    }?;
+pub fn parse_bech32_with_prefix(data: &str, expected_prefix: &str) -> Result<Vec<u8>, StdError> {
+    let (prefix, parsed_data) = parse_bech32(data)?;
 
     if prefix != expected_prefix {
         return Err(prefix_error(expected_prefix, &prefix));
     }
 
+    Ok(parsed_data)
+}
+
+pub fn parse_bech32(data: &str) -> Result<(String, Vec<u8>), StdError> {
+    let (prefix, parsed_data, _variant) = match bech32::decode(data) {
+        Ok(parsed_data) => Ok(parsed_data),
+        Err(err) => Err(base32_parsing_error(&err)),
+    }?;
+
     match Vec::<u8>::from_base32(&parsed_data) {
-        Ok(res) => Ok(res),
+        Ok(res) => Ok((prefix, res)),
         Err(err) => Err(base32_parsing_error(&err)),
     }
 }
