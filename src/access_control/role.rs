@@ -245,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_role() {
+    fn test_take_role() {
         let creator = Addr::unchecked("owner".to_string());
         let user = Addr::unchecked("user".to_string());
         let role = TestRole::RoleA;
@@ -262,7 +262,7 @@ mod tests {
         // Ensure the user has the role
         assert!(AccessControl::has_role(deps.as_mut().storage, &role, &user));
 
-        // Admin should be able to remove role
+        // Admin should be able to take role
         assert!(AccessControl::take_role(&mut deps.as_mut(), &env, &creator, &role, &user).is_ok());
 
         // Ensure the user no longer has the role
