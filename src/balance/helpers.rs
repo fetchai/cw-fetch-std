@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn test_into_map() {
+    fn test_into_map_with_duplicities_sum() {
         let vec = vec![coin(100, "atom"), coin(50, "btc"), coin(50, "btc")];
         let map = vec
             .into_map_with_duplicities(|mut e, new_value| Ok(*e.get_mut() += new_value))
