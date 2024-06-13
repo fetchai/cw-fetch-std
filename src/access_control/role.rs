@@ -1,24 +1,27 @@
-/*
-abstract contract AccessControl is Context, IAccessControl, ERC165 {
-struct RoleData {
-    mapping(address account => bool) hasRole;
-    bytes32 adminRole;
-}
-
-mapping(bytes32 role => RoleData) private _roles;
-
-bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
-
- */
-
 use crate::permissions::is_super_admin;
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Deps, DepsMut, Env, StdError, StdResult, Storage};
 use cw_storage_plus::Map;
 use std::marker::PhantomData;
 
-const ROLE_ADMIN: Map<&str, Addr> = Map::new("role_admin");
-const ROLE: Map<&str, ()> = Map::new("roles");
+#[cw_serde]
+pub struct RoleData {
+    role_admin: Option<Addr>,
+}
 
+impl Default for RoleData {
+    fn default() -> Self {
+        Self::new(None)
+    }
+}
+
+impl RoleData {
+    pub fn new(admin: Option<Addr>) -> Self {
+        RoleData { role_admin: admin }
+    }
+}
+
+const ROLE: Map<&str, RoleData> = Map::new("roles");
 const HAS_ROLE: Map<(&str, &Addr), ()> = Map::new("has_role");
 
 pub struct AccessControl<T> {
@@ -27,11 +30,15 @@ pub struct AccessControl<T> {
 
 impl<T: AsRef<str>> AccessControl<T> {
     pub fn get_role_admin(storage: &dyn Storage, role: &T) -> StdResult<Option<Addr>> {
-        ROLE_ADMIN.may_load(storage, role.as_ref())
+        Ok(ROLE
+            .may_load(storage, role.as_ref())?
+            .and_then(|data| data.role_admin))
     }
 
     fn _set_role_admin(storage: &mut dyn Storage, role: &T, new_admin: &Addr) -> StdResult<()> {
-        ROLE_ADMIN.save(storage, role.as_ref(), new_admin)
+        let mut role_data = ROLE.may_load(storage, role.as_ref())?.unwrap_or_default();
+        role_data.role_admin = Some(new_admin.clone());
+        ROLE.save(storage, role.as_ref(), &role_data)
     }
 
     pub fn has_role(storage: &dyn Storage, role: &T, address: &Addr) -> bool {
@@ -67,7 +74,7 @@ impl<T: AsRef<str>> AccessControl<T> {
         Ok(())
     }
 
-    pub fn remove_role(
+    pub fn take_role(
         deps: &mut DepsMut,
         env: &Env,
         sender: &Addr,
@@ -92,11 +99,13 @@ impl<T: AsRef<str>> AccessControl<T> {
             )));
         }
 
-        ROLE.save(storage, role.as_ref(), &())?;
-
-        if let Some(admin) = role_admin {
-            Self::_set_role_admin(storage, role, admin)?;
-        }
+        ROLE.save(
+            storage,
+            role.as_ref(),
+            &RoleData {
+                role_admin: role_admin.cloned(),
+            },
+        )?;
 
         Ok(())
     }
@@ -114,6 +123,29 @@ impl<T: AsRef<str>> AccessControl<T> {
 
     pub fn role_exists(storage: &dyn Storage, role: &T) -> bool {
         ROLE.has(storage, role.as_ref())
+    }
+
+    pub fn ensure_has_role_if_exists(
+        storage: &dyn Storage,
+        role: &T,
+        address: &Addr,
+    ) -> StdResult<()> {
+        if Self::role_exists(storage, role) {
+            Self::ensure_has_role(storage, role, address)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn ensure_has_role(storage: &dyn Storage, role: &T, address: &Addr) -> StdResult<()> {
+        if !Self::has_role(storage, role, address) {
+            return Err(StdError::generic_err(format!(
+                "Address {} does not have role {}",
+                address,
+                role.as_ref()
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -231,9 +263,7 @@ mod tests {
         assert!(AccessControl::has_role(deps.as_mut().storage, &role, &user));
 
         // Admin should be able to remove role
-        assert!(
-            AccessControl::remove_role(&mut deps.as_mut(), &env, &creator, &role, &user).is_ok()
-        );
+        assert!(AccessControl::take_role(&mut deps.as_mut(), &env, &creator, &role, &user).is_ok());
 
         // Ensure the user no longer has the role
         assert!(!AccessControl::has_role(
