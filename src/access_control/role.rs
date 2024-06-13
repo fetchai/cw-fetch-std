@@ -1,5 +1,3 @@
-
-
 /*
 abstract contract AccessControl is Context, IAccessControl, ERC165 {
 struct RoleData {
@@ -13,54 +11,43 @@ bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
  */
 
-
-use std::marker::PhantomData;
 use cosmwasm_std::{Addr, StdResult, Storage};
 use cw_storage_plus::Map;
+use std::marker::PhantomData;
 
-const ROLE_ADMIN: Map<String, Addr> =
-    Map::new("role_admin");
+const ROLE_ADMIN: Map<String, Addr> = Map::new("role_admin");
 
+const HAS_ROLE: Map<(&String, &Addr), ()> = Map::new("has_role");
 
-const HAS_ROLE: Map<(&String, &Addr), ()> =
-    Map::new("has_role");
-
-struct AccessControl<T>
-{
+pub struct AccessControl<T> {
     phantom: PhantomData<T>,
 }
 
-impl<T: std::fmt::Display> AccessControl<T>
-{
-    pub fn get_role_admin(storage: &dyn Storage, role: &T) -> StdResult<Option<Addr>>
-    {
+impl<T: std::fmt::Display> AccessControl<T> {
+    pub fn get_role_admin(storage: &dyn Storage, role: &T) -> StdResult<Option<Addr>> {
         ROLE_ADMIN.may_load(storage, role.to_string())
     }
 
-    fn _set_role_admin(storage: &mut dyn Storage, role: &T, new_admin: &Addr) -> StdResult<()>
-    {
+    fn _set_role_admin(storage: &mut dyn Storage, role: &T, new_admin: &Addr) -> StdResult<()> {
         ROLE_ADMIN.save(storage, role.to_string(), new_admin)
     }
 
-    pub fn has_role(storage: &dyn Storage, role: &T, address: &Addr) -> bool
-    {
+    pub fn has_role(storage: &dyn Storage, role: &T, address: &Addr) -> bool {
         HAS_ROLE.has(storage, (&role.to_string(), address))
     }
-
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fmt;
     use super::*;
-    use cosmwasm_schema::{cw_serde};
+    use cosmwasm_schema::cw_serde;
     use cosmwasm_std::testing::mock_dependencies;
+    use std::fmt;
 
     #[cw_serde]
-    enum TestRole
-    {
+    enum TestRole {
         RoleA,
-        RoleB
+        RoleB,
     }
 
     impl TestRole {
@@ -78,17 +65,25 @@ mod tests {
         }
     }
 
-
-
     #[test]
     fn get_set_role_admin() {
         let mut deps = mock_dependencies();
         let creator = Addr::unchecked("owner".to_string());
 
-        assert!(AccessControl::get_role_admin(deps.as_mut().storage, &TestRole::RoleA).unwrap().is_none());
-        assert!(AccessControl::_set_role_admin(deps.as_mut().storage, &TestRole::RoleA, &creator).is_ok());
-        assert_eq!(&AccessControl::get_role_admin(deps.as_mut().storage, &TestRole::RoleA).unwrap().unwrap(), &creator);
+        assert!(
+            AccessControl::get_role_admin(deps.as_mut().storage, &TestRole::RoleA)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            AccessControl::_set_role_admin(deps.as_mut().storage, &TestRole::RoleA, &creator)
+                .is_ok()
+        );
+        assert_eq!(
+            &AccessControl::get_role_admin(deps.as_mut().storage, &TestRole::RoleA)
+                .unwrap()
+                .unwrap(),
+            &creator
+        );
     }
-
-
 }
