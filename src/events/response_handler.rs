@@ -1,25 +1,29 @@
 use crate::events::IntoEvent;
-use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg, Response, SubMsg};
+use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg, Empty, Response, SubMsg};
 
-pub struct ResponseHandler {
-    response: Response,
+pub struct ResponseHandler<T = Empty> {
+    response: Response<T>,
 }
 
-impl ResponseHandler {
-    pub fn add_event<T: IntoEvent>(&mut self, event: T) {
+impl<T> ResponseHandler<T> {
+    pub fn add_event<E: IntoEvent>(&mut self, event: E) {
         self.response.events.push(event.into_event());
     }
 
-    pub fn add_msg(&mut self, msg: impl Into<CosmosMsg>) {
+    pub fn add_message(&mut self, msg: impl Into<CosmosMsg<T>>) {
         self.response.messages.push(SubMsg::new(msg));
     }
 
-    pub fn into_response(self) -> Response {
+    pub fn add_submessage(&mut self, msg: SubMsg<T>) {
+        self.response.messages.push(msg);
+    }
+
+    pub fn into_response(self) -> Response<T> {
         self.response
     }
 
     pub fn add_bank_send_msg(&mut self, to_addr: &Addr, amount: Vec<Coin>) {
-        self.add_msg(BankMsg::Send {
+        self.add_message(BankMsg::Send {
             to_address: to_addr.to_string(),
             amount,
         })
