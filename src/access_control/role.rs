@@ -47,9 +47,9 @@ impl<T: AsRef<str>> AccessControl<T> {
 
     pub fn ensure_role_admin(deps: &Deps, env: &Env, sender: &Addr, role: &T) -> StdResult<()> {
         if !is_super_admin(deps, env, sender)? {
-            let role_admin = Self::get_role_admin(deps.storage, role)?.ok_or(
-                StdError::generic_err(format!("No admin for role {}", role.as_ref())),
-            )?;
+            let role_admin = Self::get_role_admin(deps.storage, role)?.ok_or_else(|| {
+                StdError::generic_err(format!("No admin for role {}", role.as_ref()))
+            })?;
 
             if role_admin != sender {
                 return Err(StdError::generic_err(format!(
