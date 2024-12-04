@@ -69,8 +69,12 @@ impl<T: AsRef<str>> AccessControl<T> {
         address: &Addr,
     ) -> StdResult<()> {
         Self::ensure_role_admin(&deps.as_ref(), env, sender, role)?;
+        Self::storage_set_role(deps.storage, role, address)?;
+        Ok(())
+    }
 
-        HAS_ROLE.save(deps.storage, (role.as_ref(), address), &())?;
+    pub fn storage_set_role(storage: &mut dyn Storage, role: &T, address: &Addr) -> StdResult<()> {
+        HAS_ROLE.save(storage, (role.as_ref(), address), &())?;
         Ok(())
     }
 
@@ -82,8 +86,16 @@ impl<T: AsRef<str>> AccessControl<T> {
         address: &Addr,
     ) -> StdResult<()> {
         Self::ensure_role_admin(&deps.as_ref(), env, sender, role)?;
+        Self::storage_remove_role(deps.storage, role, address)?;
+        Ok(())
+    }
 
-        HAS_ROLE.remove(deps.storage, (role.as_ref(), address));
+    pub fn storage_remove_role(
+        storage: &mut dyn Storage,
+        role: &T,
+        address: &Addr,
+    ) -> StdResult<()> {
+        HAS_ROLE.remove(storage, (role.as_ref(), address));
         Ok(())
     }
 
