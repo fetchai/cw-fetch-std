@@ -136,35 +136,27 @@ impl<T: AsRef<str>> AccessControl<T> {
         ROLE.has(storage, role.as_ref())
     }
 
-    pub fn ensure_has_role_if_exists(
-        deps: &Deps,
-        env: &Env,
-        role: &T,
-        address: &Addr,
-    ) -> StdResult<()> {
+    pub fn ensure_has_role_if_exists(deps: &Deps, role: &T, address: &Addr) -> StdResult<()> {
         if Self::role_exists(deps.storage, role) {
-            Self::ensure_has_role(deps, env, role, address)?;
+            Self::ensure_has_role(deps, role, address)?;
         }
 
         Ok(())
     }
 
-    pub fn ensure_has_role(deps: &Deps, env: &Env, role: &T, address: &Addr) -> StdResult<()> {
-        if Self::has_role(deps.storage, role, address) || is_super_admin(deps, env, address)? {
+    pub fn ensure_has_role(deps: &Deps, role: &T, address: &Addr) -> StdResult<()> {
+        if Self::has_role(deps.storage, role, address) {
             Ok(())
         } else {
             Err(no_role_error(address, role))
         }
     }
 
-    pub fn ensure_has_roles(deps: &Deps, env: &Env, roles: &[T], address: &Addr) -> StdResult<()> {
+    pub fn ensure_has_roles(deps: &Deps, roles: &[T], address: &Addr) -> StdResult<()> {
         for role in roles {
             if Self::has_role(deps.storage, role, address) {
                 return Ok(());
             }
-        }
-        if is_super_admin(deps, env, address)? {
-            return Ok(());
         }
 
         Err(insufficient_permissions_error())

@@ -1,7 +1,7 @@
 use crate::access_control::AccessControl;
 use crate::events::ResponseHandler;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdResult};
 use strum::IntoEnumIterator;
 
 #[cw_serde]
@@ -39,14 +39,13 @@ pub fn query_roles<T: IntoEnumIterator + AsRef<str>>(
 
 pub fn execute_give_role_by_admin_role<T: AsRef<str>>(
     deps: DepsMut,
-    env: Env,
     info: MessageInfo,
     role: T,
     addr: Addr,
     required_sender_role: T,
 ) -> StdResult<Response> {
     // Only admin can give role
-    AccessControl::ensure_has_role(&deps.as_ref(), &env, &required_sender_role, &info.sender)?;
+    AccessControl::ensure_has_role(&deps.as_ref(), &required_sender_role, &info.sender)?;
 
     let response_handler = ResponseHandler::default();
 
@@ -62,14 +61,13 @@ pub fn execute_give_role_by_admin_role<T: AsRef<str>>(
 
 pub fn execute_take_role_by_admin_role<T: AsRef<str>>(
     deps: DepsMut,
-    env: Env,
     info: MessageInfo,
     role: T,
     addr: Addr,
     required_sender_role: T,
 ) -> StdResult<Response> {
     // Only admin can take role
-    AccessControl::ensure_has_role(&deps.as_ref(), &env, &required_sender_role, &info.sender)?;
+    AccessControl::ensure_has_role(&deps.as_ref(), &required_sender_role, &info.sender)?;
 
     let response_handler = ResponseHandler::default();
 
