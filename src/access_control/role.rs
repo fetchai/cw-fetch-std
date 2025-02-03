@@ -50,11 +50,10 @@ impl<T: AsRef<str>> AccessControl<T> {
     }
 
     pub fn ensure_role_admin(deps: &Deps, env: &Env, sender: &Addr, role: &T) -> StdResult<()> {
-        let role_admin = Self::get_role_admin(deps.storage, role)?
-            .ok_or_else(|| sender_is_not_role_admin_error(role))?;
-
-        if role_admin == sender {
-            return Ok(());
+        if let Some(role_admin) = Self::get_role_admin(deps.storage, role)? {
+            if role_admin == sender {
+                return Ok(());
+            }
         }
 
         if is_super_admin(deps, env, sender)? {
