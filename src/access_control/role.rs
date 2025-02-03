@@ -1,6 +1,10 @@
+use crate::access_control::error::{
+    insufficient_permissions_error, no_role_error, role_already_exist_error,
+    sender_is_not_role_admin_error,
+};
 use crate::permissions::is_super_admin;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Deps, DepsMut, Env, StdError, StdResult, Storage};
+use cosmwasm_std::{Addr, Deps, DepsMut, Env, StdResult, Storage};
 use cw_storage_plus::Map;
 use std::marker::PhantomData;
 
@@ -46,19 +50,18 @@ impl<T: AsRef<str>> AccessControl<T> {
     }
 
     pub fn ensure_role_admin(deps: &Deps, env: &Env, sender: &Addr, role: &T) -> StdResult<()> {
-        if !is_super_admin(deps, env, sender)? {
-            let role_admin = Self::get_role_admin(deps.storage, role)?.ok_or_else(|| {
-                StdError::generic_err(format!("No admin for role {}", role.as_ref()))
-            })?;
+        let role_admin = Self::get_role_admin(deps.storage, role)?
+            .ok_or_else(|| sender_is_not_role_admin_error(role))?;
 
-            if role_admin != sender {
-                return Err(StdError::generic_err(format!(
-                    "Sender is not admin of role {}",
-                    role.as_ref()
-                )));
-            }
+        if role_admin == sender {
+            return Ok(());
         }
-        Ok(())
+
+        if is_super_admin(deps, env, sender)? {
+            return Ok(());
+        }
+
+        Err(sender_is_not_role_admin_error(role))
     }
 
     pub fn give_role(
@@ -105,10 +108,7 @@ impl<T: AsRef<str>> AccessControl<T> {
         role_admin: Option<&Addr>,
     ) -> StdResult<()> {
         if Self::role_exists(storage, role) {
-            return Err(StdError::generic_err(format!(
-                "Role {} already exist",
-                role.as_ref()
-            )));
+            return Err(role_already_exist_error(role));
         }
 
         ROLE.save(
@@ -154,11 +154,7 @@ impl<T: AsRef<str>> AccessControl<T> {
         if Self::has_role(deps.storage, role, address) || is_super_admin(deps, env, address)? {
             Ok(())
         } else {
-            Err(StdError::generic_err(format!(
-                "Address {} does not have role {}",
-                address,
-                role.as_ref()
-            )))
+            Err(no_role_error(address, role))
         }
     }
 
@@ -172,7 +168,7 @@ impl<T: AsRef<str>> AccessControl<T> {
             return Ok(());
         }
 
-        Err(StdError::generic_err("Insufficient permissions"))
+        Err(insufficient_permissions_error())
     }
 }
 
