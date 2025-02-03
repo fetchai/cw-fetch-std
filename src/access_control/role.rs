@@ -4,7 +4,7 @@ use crate::access_control::error::{
 };
 use crate::permissions::is_super_admin;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Deps, DepsMut, Env, StdResult, Storage};
+use cosmwasm_std::{Addr, Deps, DepsMut, Env, Order, StdResult, Storage};
 use cw_storage_plus::Map;
 use std::marker::PhantomData;
 
@@ -168,6 +168,18 @@ impl<T: AsRef<str>> AccessControl<T> {
         }
 
         Err(insufficient_permissions_error())
+    }
+
+    pub fn get_all_addresses_with_role<'a>(
+        storage: &'a dyn Storage,
+        role: &T,
+    ) -> Box<dyn Iterator<Item = StdResult<Addr>> + 'a> {
+        Box::new(
+            HAS_ROLE
+                .prefix(role.as_ref())
+                .range(storage, None, None, Order::Ascending)
+                .map(|res| res.map(|(addr, _)| addr)),
+        )
     }
 }
 

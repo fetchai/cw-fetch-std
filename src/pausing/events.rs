@@ -3,7 +3,7 @@ pub struct ContractPausedEvent<'a> {
     pub since_block: &'a u64,
 }
 
-impl<'a> IntoEvent for ContractPausedEvent<'a> {
+impl IntoEvent for ContractPausedEvent<'_> {
     fn event_name(&self) -> &str {
         "contract_paused"
     }
