@@ -1,7 +1,6 @@
 use crate::access_control::AccessControl;
-use crate::events::ResponseHandler;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdResult};
+use cosmwasm_std::{Addr, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use strum::IntoEnumIterator;
 
 #[cw_serde]
@@ -39,20 +38,21 @@ pub fn query_roles<T: IntoEnumIterator + AsRef<str>>(
 
 pub fn execute_give_role_by_admin_role<T: AsRef<str>>(
     deps: DepsMut,
+    env: Env,
     info: MessageInfo,
     role: T,
     addr: Addr,
     required_sender_role: T,
 ) -> StdResult<Response> {
-    // Only admin can give role
-    AccessControl::ensure_has_role(&deps.as_ref(), &required_sender_role, &info.sender)?;
-
-    let response_handler = ResponseHandler::default();
-
+    AccessControl::ensure_has_role_or_superadmin(
+        &deps.as_ref(),
+        &env,
+        &required_sender_role,
+        &info.sender,
+    )?;
     AccessControl::storage_set_role(deps.storage, &role, &addr)?;
 
-    Ok(response_handler
-        .into_response()
+    Ok(Response::new()
         .add_attribute("action", "give_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role.as_ref())
@@ -61,20 +61,21 @@ pub fn execute_give_role_by_admin_role<T: AsRef<str>>(
 
 pub fn execute_take_role_by_admin_role<T: AsRef<str>>(
     deps: DepsMut,
+    env: Env,
     info: MessageInfo,
     role: T,
     addr: Addr,
     required_sender_role: T,
 ) -> StdResult<Response> {
-    // Only admin can take role
-    AccessControl::ensure_has_role(&deps.as_ref(), &required_sender_role, &info.sender)?;
-
-    let response_handler = ResponseHandler::default();
-
+    AccessControl::ensure_has_role_or_superadmin(
+        &deps.as_ref(),
+        &env,
+        &required_sender_role,
+        &info.sender,
+    )?;
     AccessControl::storage_remove_role(deps.storage, &role, &addr)?;
 
-    Ok(response_handler
-        .into_response()
+    Ok(Response::new()
         .add_attribute("action", "take_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role.as_ref())

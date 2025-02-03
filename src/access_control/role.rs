@@ -49,28 +49,18 @@ impl<T: AsRef<str>> AccessControl<T> {
         HAS_ROLE.has(storage, (role.as_ref(), address))
     }
 
-    pub fn ensure_role_admin(deps: &Deps, env: &Env, sender: &Addr, role: &T) -> StdResult<()> {
+    pub fn ensure_role_admin(deps: &Deps, sender: &Addr, role: &T) -> StdResult<()> {
         if let Some(role_admin) = Self::get_role_admin(deps.storage, role)? {
             if role_admin == sender {
                 return Ok(());
             }
         }
 
-        if is_super_admin(deps, env, sender)? {
-            return Ok(());
-        }
-
         Err(sender_is_not_role_admin_error(role))
     }
 
-    pub fn give_role(
-        deps: &mut DepsMut,
-        env: &Env,
-        sender: &Addr,
-        role: &T,
-        address: &Addr,
-    ) -> StdResult<()> {
-        Self::ensure_role_admin(&deps.as_ref(), env, sender, role)?;
+    pub fn give_role(deps: &mut DepsMut, sender: &Addr, role: &T, address: &Addr) -> StdResult<()> {
+        Self::ensure_role_admin(&deps.as_ref(), sender, role)?;
         Self::storage_set_role(deps.storage, role, address)?;
         Ok(())
     }
@@ -80,14 +70,8 @@ impl<T: AsRef<str>> AccessControl<T> {
         Ok(())
     }
 
-    pub fn take_role(
-        deps: &mut DepsMut,
-        env: &Env,
-        sender: &Addr,
-        role: &T,
-        address: &Addr,
-    ) -> StdResult<()> {
-        Self::ensure_role_admin(&deps.as_ref(), env, sender, role)?;
+    pub fn take_role(deps: &mut DepsMut, sender: &Addr, role: &T, address: &Addr) -> StdResult<()> {
+        Self::ensure_role_admin(&deps.as_ref(), sender, role)?;
         Self::storage_remove_role(deps.storage, role, address)?;
         Ok(())
     }
@@ -123,12 +107,11 @@ impl<T: AsRef<str>> AccessControl<T> {
 
     pub fn change_role_admin(
         deps: DepsMut,
-        env: &Env,
         sender: &Addr,
         role: &T,
         new_admin: &Addr,
     ) -> StdResult<()> {
-        Self::ensure_role_admin(&deps.as_ref(), env, sender, role)?;
+        Self::ensure_role_admin(&deps.as_ref(), sender, role)?;
         Self::_set_role_admin(deps.storage, role, new_admin)
     }
 
@@ -146,6 +129,19 @@ impl<T: AsRef<str>> AccessControl<T> {
 
     pub fn ensure_has_role(deps: &Deps, role: &T, address: &Addr) -> StdResult<()> {
         if Self::has_role(deps.storage, role, address) {
+            Ok(())
+        } else {
+            Err(no_role_error(address, role))
+        }
+    }
+
+    pub fn ensure_has_role_or_superadmin(
+        deps: &Deps,
+        env: &Env,
+        role: &T,
+        address: &Addr,
+    ) -> StdResult<()> {
+        if Self::has_role(deps.storage, role, address) || is_super_admin(deps, env, address)? {
             Ok(())
         } else {
             Err(no_role_error(address, role))
@@ -264,7 +260,7 @@ mod tests {
         assert!(AccessControl::create_role(deps.as_mut().storage, &role, Some(&creator)).is_ok());
 
         // Admin should be able to give role
-        assert!(AccessControl::give_role(&mut deps.as_mut(), &env, &creator, &role, &user).is_ok());
+        assert!(AccessControl::give_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
 
         // Ensure the user has the role
         assert!(AccessControl::has_role(deps.as_mut().storage, &role, &user));
@@ -283,13 +279,13 @@ mod tests {
         assert!(AccessControl::create_role(deps.as_mut().storage, &role, Some(&creator)).is_ok());
 
         // Admin should be able to give role
-        assert!(AccessControl::give_role(&mut deps.as_mut(), &env, &creator, &role, &user).is_ok());
+        assert!(AccessControl::give_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
 
         // Ensure the user has the role
         assert!(AccessControl::has_role(deps.as_mut().storage, &role, &user));
 
         // Admin should be able to take role
-        assert!(AccessControl::take_role(&mut deps.as_mut(), &env, &creator, &role, &user).is_ok());
+        assert!(AccessControl::take_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
 
         // Ensure the user no longer has the role
         assert!(!AccessControl::has_role(
@@ -321,8 +317,7 @@ mod tests {
 
         // Change the role admin
         assert!(
-            AccessControl::change_role_admin(deps.as_mut(), &env, &creator, &role, &new_admin)
-                .is_ok()
+            AccessControl::change_role_admin(deps.as_mut(), &creator, &role, &new_admin).is_ok()
         );
 
         // Ensure the new role admin is set correctly
@@ -347,10 +342,10 @@ mod tests {
         assert!(AccessControl::create_role(deps.as_mut().storage, &role, Some(&creator)).is_ok());
 
         // Ensure role admin passes for the correct admin
-        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &creator, &role).is_ok());
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &creator, &role).is_ok());
 
         // Ensure role admin fails for someone who is not the admin
-        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &other, &role).is_err());
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &other, &role).is_err());
     }
 
     #[test]
@@ -370,13 +365,13 @@ mod tests {
         );
 
         // Ensure role admin passes for the correct admin
-        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &role_admin, &role).is_ok());
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &role_admin, &role).is_ok());
 
-        // Ensure super-admin is also role admin
-        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &creator, &role).is_ok());
+        // Super-admin is not role admin
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &creator, &role).is_err());
 
         // Ensure role admin fails for someone who is not the admin
-        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &other, &role).is_err());
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &other, &role).is_err());
     }
 
     #[test]
@@ -392,10 +387,10 @@ mod tests {
         // Create the role and set admin
         assert!(AccessControl::create_role(deps.as_mut().storage, &role, None).is_ok());
 
-        // Ensure super-admin is only role admin
-        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &creator, &role).is_ok());
+        // Super-admin is not role admin
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &creator, &role).is_err());
 
         // Ensure role admin fails for someone who is not the admin
-        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &env, &other, &role).is_err());
+        assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &other, &role).is_err());
     }
 }
