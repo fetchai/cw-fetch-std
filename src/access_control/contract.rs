@@ -81,3 +81,18 @@ pub fn execute_revoke_role_by_admin_role<T: AsRef<str>>(
         .add_attribute("role", role.as_ref())
         .add_attribute("addr", addr.to_string()))
 }
+
+pub fn execute_renounce_role<T: AsRef<str>>(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    role: T,
+) -> StdResult<Response> {
+    AccessControl::ensure_has_role(&deps.as_ref(), &role, &info.sender)?;
+    AccessControl::storage_remove_role(deps.storage, &role, &info.sender)?;
+
+    Ok(Response::new()
+        .add_attribute("action", "renounce_role")
+        .add_attribute("sender", info.sender)
+        .add_attribute("role", role.as_ref()))
+}
