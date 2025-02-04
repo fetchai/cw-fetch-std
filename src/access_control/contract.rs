@@ -36,7 +36,7 @@ pub fn query_roles<T: IntoEnumIterator + AsRef<str>>(
     Ok(QueryRolesResponse { roles })
 }
 
-pub fn execute_give_role_by_admin_role<T: AsRef<str>>(
+pub fn execute_grant_role_by_admin_role<T: AsRef<str>>(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -53,13 +53,13 @@ pub fn execute_give_role_by_admin_role<T: AsRef<str>>(
     AccessControl::storage_set_role(deps.storage, &role, &addr)?;
 
     Ok(Response::new()
-        .add_attribute("action", "give_role")
+        .add_attribute("action", "grant_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role.as_ref())
         .add_attribute("addr", addr.to_string()))
 }
 
-pub fn execute_take_role_by_admin_role<T: AsRef<str>>(
+pub fn execute_revoke_role_by_admin_role<T: AsRef<str>>(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -76,7 +76,7 @@ pub fn execute_take_role_by_admin_role<T: AsRef<str>>(
     AccessControl::storage_remove_role(deps.storage, &role, &addr)?;
 
     Ok(Response::new()
-        .add_attribute("action", "take_role")
+        .add_attribute("action", "revoke_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role.as_ref())
         .add_attribute("addr", addr.to_string()))

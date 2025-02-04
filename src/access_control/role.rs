@@ -59,7 +59,12 @@ impl<T: AsRef<str>> AccessControl<T> {
         Err(sender_is_not_role_admin_error(role))
     }
 
-    pub fn give_role(deps: &mut DepsMut, sender: &Addr, role: &T, address: &Addr) -> StdResult<()> {
+    pub fn grant_role(
+        deps: &mut DepsMut,
+        sender: &Addr,
+        role: &T,
+        address: &Addr,
+    ) -> StdResult<()> {
         Self::ensure_role_admin(&deps.as_ref(), sender, role)?;
         Self::storage_set_role(deps.storage, role, address)?;
         Ok(())
@@ -70,7 +75,12 @@ impl<T: AsRef<str>> AccessControl<T> {
         Ok(())
     }
 
-    pub fn take_role(deps: &mut DepsMut, sender: &Addr, role: &T, address: &Addr) -> StdResult<()> {
+    pub fn revoke_role(
+        deps: &mut DepsMut,
+        sender: &Addr,
+        role: &T,
+        address: &Addr,
+    ) -> StdResult<()> {
         Self::ensure_role_admin(&deps.as_ref(), sender, role)?;
         Self::storage_remove_role(deps.storage, role, address)?;
         Ok(())
@@ -248,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn test_give_role() {
+    fn test_grant_role() {
         let creator = Addr::unchecked("owner".to_string());
         let user = Addr::unchecked("user".to_string());
         let role = TestRole::RoleA;
@@ -259,15 +269,15 @@ mod tests {
         // Create the role and set admin
         assert!(AccessControl::create_role(deps.as_mut().storage, &role, Some(&creator)).is_ok());
 
-        // Admin should be able to give role
-        assert!(AccessControl::give_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
+        // Admin should be able to grant role
+        assert!(AccessControl::grant_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
 
         // Ensure the user has the role
         assert!(AccessControl::has_role(deps.as_mut().storage, &role, &user));
     }
 
     #[test]
-    fn test_take_role() {
+    fn test_revoke_role() {
         let creator = Addr::unchecked("owner".to_string());
         let user = Addr::unchecked("user".to_string());
         let role = TestRole::RoleA;
@@ -278,14 +288,14 @@ mod tests {
         // Create the role and set admin
         assert!(AccessControl::create_role(deps.as_mut().storage, &role, Some(&creator)).is_ok());
 
-        // Admin should be able to give role
-        assert!(AccessControl::give_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
+        // Admin should be able to grant role
+        assert!(AccessControl::grant_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
 
         // Ensure the user has the role
         assert!(AccessControl::has_role(deps.as_mut().storage, &role, &user));
 
-        // Admin should be able to take role
-        assert!(AccessControl::take_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
+        // Admin should be able to revoke role
+        assert!(AccessControl::revoke_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
 
         // Ensure the user no longer has the role
         assert!(!AccessControl::has_role(
