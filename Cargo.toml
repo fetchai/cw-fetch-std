@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 cosmwasm-std = "1.5.3"
 cosmwasm-schema = "1.5.3"
+schemars = { version = "0.8", features = ["derive"] }
 cw-storage-plus = "1.2.0"
 bech32 = "0.9.1"
 sha2 = "0.10.6"

@@ -12,6 +12,7 @@ pub struct QueryRolesResponse {
     pub roles: Vec<String>,
 }
 
+/*
 pub fn query_all_addresses_with_role(
     deps: Deps,
     role: String,
@@ -103,3 +104,4 @@ pub fn execute_renounce_role<T: Into<String>>(
         .add_attribute("sender", info.sender)
         .add_attribute("role", str_role))
 }
+*/

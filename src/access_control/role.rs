@@ -1,55 +1,90 @@
+use std::marker::PhantomData;
 use crate::access_control::error::{
     insufficient_permissions_error, no_role_error, role_already_exist_error,
     sender_is_not_role_admin_error,
 };
 use crate::permissions::is_super_admin;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Deps, DepsMut, Env, Order, StdResult, Storage};
-use cw_storage_plus::Map;
+use cosmwasm_schema::schemars::JsonSchema;
+use cosmwasm_std::{Addr, Deps, DepsMut, Env, Order, StdResult, Storage, Empty};
+use cw_storage_plus::{Key, Map, PrimaryKey};
+use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 
-pub const DEFAULT_ADMIN_ROLE: &str = "admin";
-
-#[cw_serde]
-pub struct RoleData {
-    admin_role: String,
+#[derive(Serialize, Deserialize, Debug, PartialEq, JsonSchema)]
+pub enum Role<T: for<'a> PrimaryKey<'a>> {
+    Admin,
+    Custom(T),
 }
 
-impl Default for RoleData {
-    fn default() -> Self {
-        RoleData {
-            admin_role: DEFAULT_ADMIN_ROLE.to_string(),
-        }
+impl<T: for<'a> PrimaryKey<'a>> Clone for Role<T> {
+    fn clone(&self) -> Self {
+        todo!()
     }
 }
 
-const ROLE: Map<&str, RoleData> = Map::new("roles");
-const HAS_ROLE: Map<(&str, &Addr), ()> = Map::new("has_role");
+impl<'a, T> PrimaryKey<'a> for Role<T>{
+    type Prefix = ();
+    type SubPrefix = ();
+    type Suffix = ();
+    type SuperSuffix = ();
 
-pub struct AccessControl {}
+    fn key(&self) -> Vec<Key> {
+        todo!()
+    }
+}
 
-impl AccessControl {
+
+#[cw_serde]
+pub struct RoleData<T: for<'a> PrimaryKey<'a>> {
+    admin_role: Role<T> ,
+}
+
+/*
+impl<T> RoleData<T> {
+    fn default() -> Self {
+        RoleData {
+            admin_role: Role::Admin,
+        }
+    }
+}
+ */
+
+fn get_roles_map<'a, T: for<'b> PrimaryKey<'b>>() -> Map<'a, Role<T>, RoleData<T>>{
+    Map::new("roles")
+}
+
+fn get_has_role_map<'a, T: for<'b> PrimaryKey<'b>>() -> Map<'a, (Role<T>, Addr), ()>{
+    Map::new("has_role")
+}
+
+pub struct AccessControl<T> {
+    phantom: PhantomData<T>,
+}
+
+impl<'a, T: Serialize + DeserializeOwned + for <'b> PrimaryKey<'b>> AccessControl<T> {
     pub fn get_admin_role(
         storage: &dyn Storage,
-        role: impl Into<String>,
-    ) -> StdResult<Option<String>> {
-        Ok(ROLE
-            .may_load(storage, &role.into())?
+        role: Role<T>,
+    ) -> StdResult<Option<Role<T>>> {
+        Ok(get_roles_map::<T>()
+            .may_load(storage, role)?
             .map(|data| data.admin_role))
     }
 
     fn _set_admin_role(
         storage: &mut dyn Storage,
         role: impl Into<String>,
-        new_admin_role: impl Into<String>,
+        new_admin_role: Role<T>,
     ) -> StdResult<()> {
         let str_role = role.into();
-        let mut role_data = ROLE.may_load(storage, &str_role)?.unwrap_or_default();
+        let mut role_data = get_roles_map::<T>().may_load(storage, &str_role)?.unwrap_or_default();
         role_data.admin_role = new_admin_role.into();
-        ROLE.save(storage, &str_role, &role_data)
+        get_roles_map::<T>().save(storage, &str_role, &role_data)
     }
 
     pub fn has_role(storage: &dyn Storage, role: impl Into<String>, address: &Addr) -> bool {
-        HAS_ROLE.has(storage, (&role.into(), address))
+        get_has_role_map::<T>().has(storage, (&role.into(), address))
     }
 
     pub fn ensure_role_admin(deps: &Deps, sender: &Addr, role: impl Into<String>) -> StdResult<()> {
@@ -63,6 +98,7 @@ impl AccessControl {
         Err(sender_is_not_role_admin_error(&str_role))
     }
 
+    /*
     pub fn grant_role(
         deps: &mut DepsMut,
         sender: &Addr,
@@ -200,17 +236,18 @@ impl AccessControl {
                 .map(|res| res.map(|(addr, _)| addr)),
         )
     }
+
+     */
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::access_control::role::tests::TestRole::{RoleA, RoleB};
     use crate::testing::helpers::deps_with_creator;
-    use cosmwasm_schema::cw_serde;
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
 
-    #[cw_serde]
     enum TestRole {
         RoleA,
         RoleB,
@@ -427,3 +464,4 @@ mod tests {
     }
     */
 }
+*/
