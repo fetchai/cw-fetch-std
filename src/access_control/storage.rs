@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use crate::access_control::error::{
     insufficient_permissions_error, no_role_error, role_already_exist_error,
     sender_is_not_role_admin_error,
@@ -5,47 +6,11 @@ use crate::access_control::error::{
 use crate::permissions::is_super_admin;
 use cosmwasm_schema::cw_serde;
 
-use cosmwasm_std::{
-    from_json, to_json_string, Addr, Deps, DepsMut, Env, Order, StdError, StdResult, Storage,
-};
+use cosmwasm_std::{Addr, Deps, DepsMut, Env, Order, StdResult, Storage};
 use cw_storage_plus::Map;
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
-
-pub const DEFAULT_ADMIN_ROLE: &str = "";
-
-pub trait RoleTrait {
-    fn to_string(&self) -> StdResult<String>;
-    fn from_string(val: &str) -> StdResult<Self>
-    where
-        Self: Sized;
-}
-
-pub enum Role<T: serde::Serialize + for<'a> Deserialize<'a> + DeserializeOwned> {
-    Admin,
-    Custom(T),
-}
-impl<T> RoleTrait for Role<T>
-where
-    T: serde::Serialize + for<'a> Deserialize<'a> + Clone, // Ensure T can be deserialized
-{
-    fn to_string(&self) -> StdResult<String> {
-        match self {
-            Role::Admin => Ok(DEFAULT_ADMIN_ROLE.to_string()),
-            Role::Custom(role) => to_json_string(&role),
-        }
-    }
-
-    fn from_string(val: &str) -> StdResult<Self> {
-        if val == DEFAULT_ADMIN_ROLE {
-            Ok(Role::Admin)
-        } else {
-            let deserialized: T =
-                from_json(val).map_err(|_| StdError::generic_err("Unknown role"))?;
-            Ok(Role::Custom(deserialized))
-        }
-    }
-}
+use crate::access_control::Role;
+use crate::access_control::role::DEFAULT_ADMIN_ROLE;
 
 #[cw_serde]
 pub struct RoleData {
@@ -63,29 +28,39 @@ impl Default for RoleData {
 const ROLE: Map<&str, RoleData> = Map::new("roles");
 const HAS_ROLE: Map<(&str, &Addr), ()> = Map::new("has_role");
 
-pub struct AccessControl {}
+pub struct AccessControl<T = String> {
+    phantom: PhantomData<T>,
+}
 
-impl AccessControl {
+impl AccessControl{
     pub fn initialise(storage: &mut dyn Storage) -> StdResult<()> {
-        if !Self::role_exists(storage, DEFAULT_ADMIN_ROLE) {
-            Self::_set_admin_role(storage, DEFAULT_ADMIN_ROLE, DEFAULT_ADMIN_ROLE)?;
-        }
+        Self::_set_admin_role(storage, DEFAULT_ADMIN_ROLE, None)?;
         Ok(())
-    }
-
-    pub fn get_admin_role(storage: &dyn Storage, role: &str) -> StdResult<Option<String>> {
-        Ok(ROLE.may_load(storage, role)?.map(|data| data.admin_role))
     }
 
     fn _set_admin_role(
         storage: &mut dyn Storage,
         role: &str,
-        new_admin_role: &str,
+        new_admin_role: Option<&str>,
     ) -> StdResult<()> {
         let mut role_data = ROLE.may_load(storage, role)?.unwrap_or_default();
-        role_data.admin_role = new_admin_role.to_string();
+
+        if let Some(new_admin_role) = new_admin_role {
+            role_data.admin_role = new_admin_role.to_string();
+        }
+
         ROLE.save(storage, role, &role_data)
     }
+}
+
+impl<T: serde::Serialize + for<'a> Deserialize<'a> + Clone > AccessControl <T> {
+
+
+    pub fn get_admin_role(storage: &dyn Storage, role: &str) -> StdResult<Option<String>> {
+        Ok(ROLE.may_load(storage, role)?.map(|data| data.admin_role))
+    }
+
+
 
     pub fn has_role(storage: &dyn Storage, role: &str, address: &Addr) -> bool {
         HAS_ROLE.has(storage, (role, address))
@@ -109,6 +84,16 @@ impl AccessControl {
     ) -> StdResult<()> {
         Self::ensure_admin_role(&deps.as_ref(), sender, role)?;
         Self::storage_set_has_role(deps.storage, role, address)?;
+        Ok(())
+    }
+
+    pub fn unchecked_grant_role(
+        storage: &mut dyn Storage,
+        role: &str,
+        address: &Addr,
+    ) -> StdResult<()> {
+        Self::_set_admin_role(storage, role, None).unwrap();
+        Self::storage_set_has_role(storage, role, address)?;
         Ok(())
     }
 
@@ -182,7 +167,7 @@ impl AccessControl {
         new_admin_role: &str,
     ) -> StdResult<()> {
         Self::ensure_admin_role(&deps.as_ref(), sender, role)?;
-        Self::_set_admin_role(deps.storage, role, new_admin_role)
+        Self::_set_admin_role(deps.storage, role, Some(new_admin_role))
     }
 
     pub fn role_exists(storage: &dyn Storage, role: &str) -> bool {
@@ -223,13 +208,16 @@ impl AccessControl {
     pub fn range_all_addresses_with_role<'a>(
         storage: &'a dyn Storage,
         role: &str,
-    ) -> Box<dyn Iterator<Item = StdResult<Addr>> + 'a> {
-        Box::new(
+    ) -> StdResult<Box<dyn Iterator<Item = StdResult<Addr>> + 'a>>  {
+       
+        let _ = Role::<T>::from_string(role)?;
+        
+        Ok(Box::new(
             HAS_ROLE
                 .prefix(role)
                 .range(storage, None, None, Order::Ascending)
                 .map(|res| res.map(|(addr, _)| addr)),
-        )
+        ))
     }
 
     pub fn range_all_roles<'a>(
@@ -245,6 +233,7 @@ impl AccessControl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::access_control::{Role};
     use crate::testing::helpers::deps_with_creator;
     use cosmwasm_schema::cw_serde;
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
@@ -271,9 +260,12 @@ mod tests {
             DEFAULT_ADMIN_ROLE
         );
 
-        assert!(
-            AccessControl::_set_admin_role(deps.as_mut().storage, &str_role_a, &str_role_b).is_ok()
-        );
+        assert!(AccessControl::_set_admin_role(
+            deps.as_mut().storage,
+            &str_role_a,
+            Some(&str_role_b)
+        )
+        .is_ok());
         assert_eq!(
             AccessControl::get_admin_role(deps.as_mut().storage, &str_role_a)
                 .unwrap()
@@ -516,13 +508,18 @@ mod tests {
     */
     #[test]
     fn test_ser() {
-        let str_a: &str = &Role::Custom(TestRole::Admin).to_string().unwrap();
+        let str_custom_admin_role: &str = &Role::Custom(TestRole::Admin).to_string().unwrap();
+        let str_admin_role: &str = &Role::<TestRole>::Admin.to_string().unwrap();
+        let str_role_a = "role_a";
 
-        let str_b: &str = &Role::<TestRole>::Admin.to_string().unwrap();
+        let role_a: Role<TestRole> = Role::from_string(str_role_a).unwrap();
 
-        assert_ne!(str_a, str_b);
+        println!("{}", str_custom_admin_role);
 
-        let rol: Role<TestRole> = Role::from_string(str_a).unwrap();
+        assert_ne!(str_admin_role, str_custom_admin_role);
+
+        let admin_role: Role<TestRole> = Role::from_string(str_admin_role).unwrap();
+        assert!(matches!(admin_role, Role::Admin));
 
         assert!(Role::<TestRole>::from_string("bla").is_err());
     }

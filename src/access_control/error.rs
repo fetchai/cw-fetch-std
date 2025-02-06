@@ -1,11 +1,7 @@
 use cosmwasm_std::{Addr, StdError};
 
-pub fn no_role_error<T: AsRef<str>>(address: &Addr, role: &T) -> StdError {
-    StdError::generic_err(format!(
-        "Address {} does not have role {}",
-        address,
-        role.as_ref()
-    ))
+pub fn no_role_error(address: &Addr, role: &str) -> StdError {
+    StdError::generic_err(format!("Address {} does not have role {}", address, role))
 }
 pub fn insufficient_permissions_error() -> StdError {
     StdError::generic_err("Insufficient permissions")
