@@ -1,51 +1,13 @@
 use crate::access_control::error::{
-    insufficient_permissions_error, no_role_error, role_already_exist_error,
-    sender_is_not_role_admin_error,
+    insufficient_permissions_error, no_role_error, sender_is_not_role_admin_error,
 };
 use crate::permissions::is_super_admin;
 use cosmwasm_schema::cw_serde;
 
-use cosmwasm_std::{
-    from_json, to_json_string, Addr, Deps, DepsMut, Env, Order, StdError, StdResult, Storage,
-};
+use cosmwasm_std::{Addr, Deps, DepsMut, Env, Order, StdResult, Storage};
 use cw_storage_plus::Map;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
 
 pub const DEFAULT_ADMIN_ROLE: &str = "";
-
-pub trait RoleTrait {
-    fn to_string(&self) -> StdResult<String>;
-    fn from_string(val: &str) -> StdResult<Self>
-    where
-        Self: Sized;
-}
-
-pub enum Role<T: serde::Serialize + for<'a> Deserialize<'a> + DeserializeOwned> {
-    Admin,
-    Custom(T),
-}
-impl<T> RoleTrait for Role<T>
-where
-    T: serde::Serialize + for<'a> Deserialize<'a> + Clone, // Ensure T can be deserialized
-{
-    fn to_string(&self) -> StdResult<String> {
-        match self {
-            Role::Admin => Ok(DEFAULT_ADMIN_ROLE.to_string()),
-            Role::Custom(role) => to_json_string(&role),
-        }
-    }
-
-    fn from_string(val: &str) -> StdResult<Self> {
-        if val == DEFAULT_ADMIN_ROLE {
-            Ok(Role::Admin)
-        } else {
-            let deserialized: T =
-                from_json(val).map_err(|_| StdError::generic_err("Unknown role"))?;
-            Ok(Role::Custom(deserialized))
-        }
-    }
-}
 
 #[cw_serde]
 pub struct RoleData {
@@ -66,25 +28,28 @@ const HAS_ROLE: Map<(&str, &Addr), ()> = Map::new("has_role");
 pub struct AccessControl {}
 
 impl AccessControl {
-    pub fn initialise(storage: &mut dyn Storage) -> StdResult<()> {
-        if !Self::role_exists(storage, DEFAULT_ADMIN_ROLE) {
-            Self::_set_admin_role(storage, DEFAULT_ADMIN_ROLE, DEFAULT_ADMIN_ROLE)?;
-        }
-        Ok(())
-    }
-
-    pub fn get_admin_role(storage: &dyn Storage, role: &str) -> StdResult<Option<String>> {
-        Ok(ROLE.may_load(storage, role)?.map(|data| data.admin_role))
-    }
-
     fn _set_admin_role(
         storage: &mut dyn Storage,
         role: &str,
         new_admin_role: &str,
     ) -> StdResult<()> {
-        let mut role_data = ROLE.may_load(storage, role)?.unwrap_or_default();
-        role_data.admin_role = new_admin_role.to_string();
-        ROLE.save(storage, role, &role_data)
+        if new_admin_role == DEFAULT_ADMIN_ROLE {
+            ROLE.remove(storage, role);
+        } else {
+            ROLE.save(
+                storage,
+                role,
+                &RoleData {
+                    admin_role: new_admin_role.to_string(),
+                },
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn get_admin_role(storage: &dyn Storage, role: &str) -> StdResult<String> {
+        Ok(ROLE.may_load(storage, role)?.unwrap_or_default().admin_role)
     }
 
     pub fn has_role(storage: &dyn Storage, role: &str, address: &Addr) -> bool {
@@ -92,10 +57,10 @@ impl AccessControl {
     }
 
     pub fn ensure_admin_role(deps: &Deps, sender: &Addr, role: &str) -> StdResult<()> {
-        if let Some(admin_role) = Self::get_admin_role(deps.storage, role)? {
-            if Self::has_role(deps.storage, &admin_role, sender) {
-                return Ok(());
-            }
+        let admin_role = Self::get_admin_role(deps.storage, role)?;
+
+        if Self::has_role(deps.storage, &admin_role, sender) {
+            return Ok(());
         }
 
         Err(sender_is_not_role_admin_error(&role))
@@ -108,11 +73,11 @@ impl AccessControl {
         address: &Addr,
     ) -> StdResult<()> {
         Self::ensure_admin_role(&deps.as_ref(), sender, role)?;
-        Self::storage_set_has_role(deps.storage, role, address)?;
+        Self::storage_grant_role(deps.storage, role, address)?;
         Ok(())
     }
 
-    pub fn storage_set_has_role(
+    pub fn storage_grant_role(
         storage: &mut dyn Storage,
         role: &str,
         address: &Addr,
@@ -128,51 +93,17 @@ impl AccessControl {
         address: &Addr,
     ) -> StdResult<()> {
         Self::ensure_admin_role(&deps.as_ref(), sender, role)?;
-        Self::storage_remove_role(deps.storage, role, address)?;
+        Self::storage_remove_has_role(deps.storage, role, address)?;
         Ok(())
     }
 
-    pub fn storage_remove_role(
+    pub fn storage_remove_has_role(
         storage: &mut dyn Storage,
         role: &str,
         address: &Addr,
     ) -> StdResult<()> {
         HAS_ROLE.remove(storage, (role, address));
         Ok(())
-    }
-
-    pub fn create_role(
-        storage: &mut dyn Storage,
-        role: &str,
-        admin_role: Option<&str>,
-    ) -> StdResult<()> {
-        if Self::role_exists(storage, role) {
-            return Err(role_already_exist_error(&role));
-        }
-
-        ROLE.save(
-            storage,
-            role,
-            &RoleData {
-                admin_role: admin_role.unwrap_or(DEFAULT_ADMIN_ROLE).to_string(),
-            },
-        )?;
-
-        Ok(())
-    }
-
-    pub fn storage_set_role(
-        storage: &mut dyn Storage,
-        role: &str,
-        admin_role: Option<&str>,
-    ) -> StdResult<()> {
-        ROLE.save(
-            storage,
-            role,
-            &RoleData {
-                admin_role: admin_role.unwrap_or(DEFAULT_ADMIN_ROLE).to_string(),
-            },
-        )
     }
 
     pub fn change_admin_role(
@@ -185,16 +116,12 @@ impl AccessControl {
         Self::_set_admin_role(deps.storage, role, new_admin_role)
     }
 
-    pub fn role_exists(storage: &dyn Storage, role: &str) -> bool {
-        ROLE.has(storage, role)
-    }
-
     pub fn ensure_has_role(deps: &Deps, role: &str, address: &Addr) -> StdResult<()> {
-        if Self::has_role(deps.storage, role, address) {
-            Ok(())
-        } else {
-            Err(no_role_error(address, role))
+        if !Self::has_role(deps.storage, role, address) {
+            return Err(no_role_error(address, role));
         }
+
+        Ok(())
     }
 
     pub fn ensure_has_role_or_superadmin(
@@ -210,7 +137,7 @@ impl AccessControl {
         }
     }
 
-    pub fn ensure_has_roles(deps: &Deps, roles: Vec<&str>, address: &Addr) -> StdResult<()> {
+    pub fn ensure_has_any_role(deps: &Deps, roles: Vec<&str>, address: &Addr) -> StdResult<()> {
         for role in roles {
             if Self::has_role(deps.storage, role, address) {
                 return Ok(());
@@ -223,13 +150,13 @@ impl AccessControl {
     pub fn range_all_addresses_with_role<'a>(
         storage: &'a dyn Storage,
         role: &str,
-    ) -> Box<dyn Iterator<Item = StdResult<Addr>> + 'a> {
-        Box::new(
+    ) -> StdResult<Box<dyn Iterator<Item = StdResult<Addr>> + 'a>> {
+        Ok(Box::new(
             HAS_ROLE
                 .prefix(role)
                 .range(storage, None, None, Order::Ascending)
                 .map(|res| res.map(|(addr, _)| addr)),
-        )
+        ))
     }
 
     pub fn range_all_roles<'a>(
@@ -246,73 +173,24 @@ impl AccessControl {
 mod tests {
     use super::*;
     use crate::testing::helpers::deps_with_creator;
-    use cosmwasm_schema::cw_serde;
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
 
-    #[cw_serde]
-    enum TestRole {
-        Admin,
-        RoleA,
-        RoleB,
-    }
+    const ROLE_A: &str = "role_a";
+    const ROLE_B: &str = "role_b";
 
     #[test]
     fn get_set_admin_role() {
         let mut deps = mock_dependencies();
-        let str_role_a = Role::Custom(TestRole::RoleA).to_string().unwrap();
-        let str_role_b = Role::Custom(TestRole::RoleB).to_string().unwrap();
-
-        AccessControl::create_role(deps.as_mut().storage, &str_role_a, None).unwrap();
 
         assert_eq!(
-            AccessControl::get_admin_role(deps.as_mut().storage, &str_role_a)
-                .unwrap()
-                .unwrap(),
+            AccessControl::get_admin_role(deps.as_mut().storage, &ROLE_A).unwrap(),
             DEFAULT_ADMIN_ROLE
         );
 
-        assert!(
-            AccessControl::_set_admin_role(deps.as_mut().storage, &str_role_a, &str_role_b).is_ok()
-        );
+        assert!(AccessControl::_set_admin_role(deps.as_mut().storage, &ROLE_A, &ROLE_B).is_ok());
         assert_eq!(
-            AccessControl::get_admin_role(deps.as_mut().storage, &str_role_a)
-                .unwrap()
-                .unwrap(),
-            str_role_b
-        );
-    }
-
-    #[test]
-    fn test_create_role() {
-        let mut deps = mock_dependencies();
-        let creator = Addr::unchecked("owner".to_string());
-        let str_role_a = Role::Custom(TestRole::RoleA).to_string().unwrap();
-        let str_role_b = Role::Custom(TestRole::RoleB).to_string().unwrap();
-
-        // Ensure the role does not exist initially
-        assert!(!AccessControl::role_exists(
-            deps.as_mut().storage,
-            &str_role_a,
-        ));
-
-        // Create the role
-        assert!(
-            AccessControl::create_role(deps.as_mut().storage, &str_role_a, Some(&str_role_b))
-                .is_ok()
-        );
-
-        // Ensure the role admin is set correctly
-        assert_eq!(
-            AccessControl::get_admin_role(deps.as_mut().storage, &str_role_a)
-                .unwrap()
-                .unwrap(),
-            str_role_b
-        );
-
-        // Trying to create the same role again should fail
-        assert!(
-            AccessControl::create_role(deps.as_mut().storage, &str_role_a, Some(&str_role_b))
-                .is_err()
+            AccessControl::get_admin_role(deps.as_mut().storage, &ROLE_A).unwrap(),
+            ROLE_B
         );
     }
 
@@ -321,17 +199,13 @@ mod tests {
         let creator = Addr::unchecked("owner".to_string());
         let user = Addr::unchecked("user".to_string());
 
-        let str_role_a = Role::Custom(TestRole::RoleA).to_string().unwrap();
-        let str_role_b = Role::Custom(TestRole::RoleB).to_string().unwrap();
+        let str_role_a = ROLE_A;
 
         let env = mock_env();
         let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
 
-        // Create the role and set admin
-        assert!(AccessControl::create_role(deps.as_mut().storage, &str_role_a, None).is_ok());
-
         // Make creator the admin
-        assert!(AccessControl::storage_set_has_role(
+        assert!(AccessControl::storage_grant_role(
             deps.as_mut().storage,
             DEFAULT_ADMIN_ROLE,
             &creator
@@ -356,23 +230,16 @@ mod tests {
         let creator = Addr::unchecked("owner".to_string());
         let user = Addr::unchecked("user".to_string());
 
-        let str_role_a = Role::Custom(TestRole::RoleA).to_string().unwrap();
-        let str_role_b = Role::Custom(TestRole::RoleB).to_string().unwrap();
+        let str_role_a = ROLE_A;
 
         let env = mock_env();
         let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
-
-        // Make creator the admin
-        assert!(AccessControl::initialise(deps.as_mut().storage).is_ok());
-        assert!(AccessControl::storage_set_has_role(
+        assert!(AccessControl::storage_grant_role(
             deps.as_mut().storage,
             DEFAULT_ADMIN_ROLE,
             &creator
         )
         .is_ok());
-
-        // Create the role and set admin
-        assert!(AccessControl::create_role(deps.as_mut().storage, &str_role_a, None).is_ok());
 
         // Admin should be able to grant role
         assert!(
@@ -403,31 +270,20 @@ mod tests {
     fn test_change_role_admin() {
         let creator = Addr::unchecked("owner".to_string());
 
-        let str_role_a = Role::Custom(TestRole::RoleA).to_string().unwrap();
-        let str_role_b = Role::Custom(TestRole::RoleB).to_string().unwrap();
+        let str_role_a = ROLE_A;
+        let str_role_b = ROLE_B;
 
         let env = mock_env();
         let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
 
-        // Make creator the admin
-        assert!(AccessControl::initialise(deps.as_mut().storage).is_ok());
-        assert!(AccessControl::storage_set_has_role(
-            deps.as_mut().storage,
-            DEFAULT_ADMIN_ROLE,
-            &creator
-        )
-        .is_ok());
-
-        // Create the role and set admin
-        assert!(AccessControl::create_role(deps.as_mut().storage, &str_role_a, None).is_ok());
-
         // Ensure the role admin is set correctly
         assert_eq!(
-            &AccessControl::get_admin_role(deps.as_mut().storage, &str_role_a)
-                .unwrap()
-                .unwrap(),
+            &AccessControl::get_admin_role(deps.as_mut().storage, &str_role_a).unwrap(),
             DEFAULT_ADMIN_ROLE
         );
+
+        AccessControl::storage_grant_role(deps.as_mut().storage, DEFAULT_ADMIN_ROLE, &creator)
+            .unwrap();
 
         // Change the role admin
         assert!(AccessControl::change_admin_role(
@@ -440,10 +296,8 @@ mod tests {
 
         // Ensure the new role admin is set correctly
         assert_eq!(
-            AccessControl::get_admin_role(deps.as_mut().storage, &str_role_a)
-                .unwrap()
-                .unwrap(),
-            Into::<String>::into(&str_role_b)
+            AccessControl::get_admin_role(deps.as_mut().storage, &str_role_a).unwrap(),
+            str_role_b
         );
     }
 
@@ -514,16 +368,4 @@ mod tests {
      assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &other, &role).is_err());
     }
     */
-    #[test]
-    fn test_ser() {
-        let str_a: &str = &Role::Custom(TestRole::Admin).to_string().unwrap();
-
-        let str_b: &str = &Role::<TestRole>::Admin.to_string().unwrap();
-
-        assert_ne!(str_a, str_b);
-
-        let rol: Role<TestRole> = Role::from_string(str_a).unwrap();
-
-        assert!(Role::<TestRole>::from_string("bla").is_err());
-    }
 }
