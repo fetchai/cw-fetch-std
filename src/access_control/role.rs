@@ -7,7 +7,7 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Deps, DepsMut, Env, Order, StdResult, Storage};
 use cw_storage_plus::Map;
 
-pub const DEFAULT_ADMIN_ROLE: &str = "admin";
+pub const DEFAULT_ADMIN_ROLE: &str = "";
 
 #[cw_serde]
 pub struct RoleData {
@@ -28,6 +28,13 @@ const HAS_ROLE: Map<(&str, &Addr), ()> = Map::new("has_role");
 pub struct AccessControl {}
 
 impl AccessControl {
+    pub fn initialise(storage: &mut dyn Storage) -> StdResult<()> {
+        if !Self::role_exists(storage, DEFAULT_ADMIN_ROLE) {
+            Self::_set_admin_role(storage, DEFAULT_ADMIN_ROLE, DEFAULT_ADMIN_ROLE)?;
+        }
+        Ok(())
+    }
+
     pub fn get_admin_role(
         storage: &dyn Storage,
         role: impl Into<String>,
@@ -71,11 +78,11 @@ impl AccessControl {
     ) -> StdResult<()> {
         let str_role = role.into();
         Self::ensure_role_admin(&deps.as_ref(), sender, &str_role)?;
-        Self::storage_set_role(deps.storage, &str_role, address)?;
+        Self::storage_set_has_role(deps.storage, &str_role, address)?;
         Ok(())
     }
 
-    pub fn storage_set_role(
+    pub fn storage_set_has_role(
         storage: &mut dyn Storage,
         role: impl Into<String>,
         address: &Addr,
@@ -126,6 +133,22 @@ impl AccessControl {
         )?;
 
         Ok(())
+    }
+
+    pub fn storage_set_role(
+        storage: &mut dyn Storage,
+        role: impl Into<String>,
+        admin_role: Option<impl Into<String>>,
+    ) -> StdResult<()> {
+        ROLE.save(
+            storage,
+            &role.into(),
+            &RoleData {
+                admin_role: admin_role
+                    .map(|role| role.into())
+                    .unwrap_or_else(|| DEFAULT_ADMIN_ROLE.to_string()),
+            },
+        )
     }
 
     pub fn change_role_admin(
@@ -205,7 +228,6 @@ impl AccessControl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::access_control::role::tests::TestRole::{RoleA, RoleB};
     use crate::testing::helpers::deps_with_creator;
     use cosmwasm_schema::cw_serde;
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
@@ -219,8 +241,8 @@ mod tests {
     impl Into<String> for TestRole {
         fn into(self) -> String {
             match self {
-                RoleA => "A".to_string(),
-                RoleB => "B".to_string(),
+                TestRole::RoleA => "A".to_string(),
+                TestRole::RoleB => "B".to_string(),
             }
         }
     }
@@ -229,21 +251,27 @@ mod tests {
     fn get_set_admin_role() {
         let mut deps = mock_dependencies();
 
-        AccessControl::create_role(deps.as_mut().storage, RoleA, None::<TestRole>).unwrap();
+        AccessControl::create_role(deps.as_mut().storage, TestRole::RoleA, None::<TestRole>)
+            .unwrap();
 
         assert_eq!(
-            AccessControl::get_admin_role(deps.as_mut().storage, RoleA)
+            AccessControl::get_admin_role(deps.as_mut().storage, TestRole::RoleA)
                 .unwrap()
                 .unwrap(),
             DEFAULT_ADMIN_ROLE
         );
 
-        assert!(AccessControl::_set_admin_role(deps.as_mut().storage, RoleA, RoleB).is_ok());
+        assert!(AccessControl::_set_admin_role(
+            deps.as_mut().storage,
+            TestRole::RoleA,
+            TestRole::RoleB
+        )
+        .is_ok());
         assert_eq!(
-            AccessControl::get_admin_role(deps.as_mut().storage, RoleA)
+            AccessControl::get_admin_role(deps.as_mut().storage, TestRole::RoleA)
                 .unwrap()
                 .unwrap(),
-            Into::<String>::into(RoleB)
+            Into::<String>::into(TestRole::RoleB)
         );
     }
 
@@ -253,21 +281,32 @@ mod tests {
         let creator = Addr::unchecked("owner".to_string());
 
         // Ensure the role does not exist initially
-        assert!(!AccessControl::role_exists(deps.as_mut().storage, RoleA));
+        assert!(!AccessControl::role_exists(
+            deps.as_mut().storage,
+            TestRole::RoleA
+        ));
 
         // Create the role
-        assert!(AccessControl::create_role(deps.as_mut().storage, RoleA, Some(RoleB)).is_ok());
+        assert!(AccessControl::create_role(
+            deps.as_mut().storage,
+            TestRole::RoleA,
+            Some(TestRole::RoleB)
+        )
+        .is_ok());
 
         // Ensure the role admin is set correctly
         assert_eq!(
-            AccessControl::get_admin_role(deps.as_mut().storage, RoleA)
+            AccessControl::get_admin_role(deps.as_mut().storage, TestRole::RoleA)
                 .unwrap()
                 .unwrap(),
-            Into::<String>::into(RoleB)
+            Into::<String>::into(TestRole::RoleB)
         );
 
         // Trying to create the same role again should fail
-        assert!(AccessControl::create_role(deps.as_mut().storage, RoleA, Some(&creator)).is_err());
+        assert!(
+            AccessControl::create_role(deps.as_mut().storage, TestRole::RoleA, Some(&creator))
+                .is_err()
+        );
     }
 
     #[test]
@@ -279,10 +318,15 @@ mod tests {
         let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
 
         // Create the role and set admin
-        assert!(AccessControl::create_role(deps.as_mut().storage, RoleA, None::<TestRole>).is_ok());
+        assert!(AccessControl::create_role(
+            deps.as_mut().storage,
+            TestRole::RoleA,
+            None::<TestRole>
+        )
+        .is_ok());
 
         // Make creator the admin
-        assert!(AccessControl::storage_set_role(
+        assert!(AccessControl::storage_set_has_role(
             deps.as_mut().storage,
             DEFAULT_ADMIN_ROLE,
             &creator
@@ -290,43 +334,70 @@ mod tests {
         .is_ok());
 
         // Admin should be able to grant role
-        assert!(AccessControl::grant_role(&mut deps.as_mut(), &creator, RoleA, &user).is_ok());
+        assert!(
+            AccessControl::grant_role(&mut deps.as_mut(), &creator, TestRole::RoleA, &user).is_ok()
+        );
 
         // Ensure the user has the role
-        assert!(AccessControl::has_role(deps.as_mut().storage, RoleA, &user));
+        assert!(AccessControl::has_role(
+            deps.as_mut().storage,
+            TestRole::RoleA,
+            &user
+        ));
     }
-
-    /*
 
     #[test]
     fn test_revoke_role() {
-     let creator = Addr::unchecked("owner".to_string());
-     let user = Addr::unchecked("user".to_string());
-     let role = TestRole::RoleA;
+        let creator = Addr::unchecked("owner".to_string());
+        let user = Addr::unchecked("user".to_string());
 
-     let env = mock_env();
-     let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
+        let env = mock_env();
+        let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
 
-     // Create the role and set admin
-     assert!(AccessControl::create_role(deps.as_mut().storage, &role, Some(&creator)).is_ok());
+        // Make creator the admin
+        assert!(AccessControl::initialise(deps.as_mut().storage).is_ok());
+        assert!(AccessControl::storage_set_has_role(
+            deps.as_mut().storage,
+            DEFAULT_ADMIN_ROLE,
+            &creator
+        )
+        .is_ok());
 
-     // Admin should be able to grant role
-     assert!(AccessControl::grant_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
+        // Create the role and set admin
+        assert!(AccessControl::create_role(
+            deps.as_mut().storage,
+            TestRole::RoleA,
+            None::<TestRole>
+        )
+        .is_ok());
 
-     // Ensure the user has the role
-     assert!(AccessControl::has_role(deps.as_mut().storage, &role, &user));
+        // Admin should be able to grant role
+        assert!(
+            AccessControl::grant_role(&mut deps.as_mut(), &creator, TestRole::RoleA, &user).is_ok()
+        );
 
-     // Admin should be able to revoke role
-     assert!(AccessControl::revoke_role(&mut deps.as_mut(), &creator, &role, &user).is_ok());
+        // Ensure the user has the role
+        assert!(AccessControl::has_role(
+            deps.as_mut().storage,
+            TestRole::RoleA,
+            &user
+        ));
 
-     // Ensure the user no longer has the role
-     assert!(!AccessControl::has_role(
-         deps.as_mut().storage,
-         &role,
-         &user
-     ));
+        // Admin should be able to revoke role
+        assert!(
+            AccessControl::revoke_role(&mut deps.as_mut(), &creator, TestRole::RoleA, &user)
+                .is_ok()
+        );
+
+        // Ensure the user no longer has the role
+        assert!(!AccessControl::has_role(
+            deps.as_mut().storage,
+            TestRole::RoleA,
+            &user
+        ));
     }
 
+    /*
     #[test]
     fn test_change_role_admin() {
      let creator = Addr::unchecked("owner".to_string());
@@ -337,7 +408,7 @@ mod tests {
      let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
 
      // Create the role and set admin
-     assert!(AccessControl::create_role(deps.as_mut().storage, &role, Some(&creator)).is_ok());
+     assert!(AccessControl::create_role(deps.as_mut().storage, role, Some(&creator)).is_ok());
 
      // Ensure the role admin is set correctly
      assert_eq!(
@@ -349,7 +420,7 @@ mod tests {
 
      // Change the role admin
      assert!(
-         AccessControl::change_role_admin(deps.as_mut(), &creator, &role, &new_admin).is_ok()
+         AccessControl::change_role_admin(deps.as_mut(), &creator, role, &new_admin).is_ok()
      );
 
      // Ensure the new role admin is set correctly

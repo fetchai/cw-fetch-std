@@ -55,7 +55,7 @@ pub fn execute_grant_role_by_admin_role<T: Into<String>>(
         &info.sender,
     )?;
     let str_role = role.into();
-    AccessControl::storage_set_role(deps.storage, &str_role, &addr)?;
+    AccessControl::storage_set_has_role(deps.storage, &str_role, &addr)?;
 
     Ok(Response::new()
         .add_attribute("action", "grant_role")
