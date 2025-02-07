@@ -4,6 +4,11 @@ use crate::access_control::error::{
 use crate::permissions::is_super_admin;
 use cosmwasm_schema::cw_serde;
 
+use crate::access_control::{
+    AccessControlHasRoleRemovedEvent, AccessControlHasRoleUpdatedEvent,
+    AccessControlRoleRemovedEvent, AccessControlRoleUpdatedEvent,
+};
+use crate::events::ResponseHandler;
 use cosmwasm_std::{Addr, Deps, DepsMut, Env, Order, StdResult, Storage};
 use cw_storage_plus::Map;
 
@@ -28,21 +33,71 @@ const HAS_ROLE: Map<(&str, &Addr), ()> = Map::new("has_role");
 pub struct AccessControl {}
 
 impl AccessControl {
+    pub fn storage_remove_role(
+        storage: &mut dyn Storage,
+        response_handler: &mut ResponseHandler,
+        role: &str,
+    ) {
+        response_handler.add_event(AccessControlRoleRemovedEvent { role });
+
+        ROLE.remove(storage, role);
+    }
+
+    fn storage_update_role(
+        storage: &mut dyn Storage,
+        response_handler: &mut ResponseHandler,
+        role: &str,
+        admin_role: &str,
+    ) -> StdResult<()> {
+        response_handler.add_event(AccessControlRoleUpdatedEvent { role, admin_role });
+
+        ROLE.save(
+            storage,
+            role,
+            &RoleData {
+                admin_role: admin_role.to_string(),
+            },
+        )
+    }
+
+    pub fn storage_grant_role(
+        storage: &mut dyn Storage,
+        response_handler: &mut ResponseHandler,
+        role: &str,
+        addr: &Addr,
+    ) -> StdResult<()> {
+        response_handler.add_event(AccessControlHasRoleUpdatedEvent {
+            role,
+            addr: addr.as_str(),
+        });
+
+        HAS_ROLE.save(storage, (role, addr), &())
+    }
+
+    pub fn storage_revoke_role(
+        storage: &mut dyn Storage,
+        response_handler: &mut ResponseHandler,
+        role: &str,
+        addr: &Addr,
+    ) {
+        response_handler.add_event(AccessControlHasRoleRemovedEvent {
+            role,
+            addr: addr.as_str(),
+        });
+
+        HAS_ROLE.remove(storage, (role, addr))
+    }
+
     fn _set_admin_role(
         storage: &mut dyn Storage,
+        response_handler: &mut ResponseHandler,
         role: &str,
         new_admin_role: &str,
     ) -> StdResult<()> {
         if new_admin_role == DEFAULT_ADMIN_ROLE {
-            ROLE.remove(storage, role);
+            Self::storage_remove_role(storage, response_handler, role);
         } else {
-            ROLE.save(
-                storage,
-                role,
-                &RoleData {
-                    admin_role: new_admin_role.to_string(),
-                },
-            )?;
+            Self::storage_update_role(storage, response_handler, role, new_admin_role)?;
         }
 
         Ok(())
@@ -68,52 +123,37 @@ impl AccessControl {
 
     pub fn grant_role(
         deps: &mut DepsMut,
+        response_handler: &mut ResponseHandler,
         sender: &Addr,
         role: &str,
         address: &Addr,
     ) -> StdResult<()> {
         Self::ensure_admin_role(&deps.as_ref(), sender, role)?;
-        Self::storage_grant_role(deps.storage, role, address)?;
-        Ok(())
-    }
-
-    pub fn storage_grant_role(
-        storage: &mut dyn Storage,
-        role: &str,
-        address: &Addr,
-    ) -> StdResult<()> {
-        HAS_ROLE.save(storage, (role, address), &())?;
+        Self::storage_grant_role(deps.storage, response_handler, role, address)?;
         Ok(())
     }
 
     pub fn revoke_role(
         deps: &mut DepsMut,
+        response_handler: &mut ResponseHandler,
         sender: &Addr,
         role: &str,
         address: &Addr,
     ) -> StdResult<()> {
         Self::ensure_admin_role(&deps.as_ref(), sender, role)?;
-        Self::storage_remove_has_role(deps.storage, role, address)?;
-        Ok(())
-    }
-
-    pub fn storage_remove_has_role(
-        storage: &mut dyn Storage,
-        role: &str,
-        address: &Addr,
-    ) -> StdResult<()> {
-        HAS_ROLE.remove(storage, (role, address));
+        Self::storage_revoke_role(deps.storage, response_handler, role, address);
         Ok(())
     }
 
     pub fn change_admin_role(
         deps: DepsMut,
+        response_handler: &mut ResponseHandler,
         sender: &Addr,
         role: &str,
         new_admin_role: &str,
     ) -> StdResult<()> {
         Self::ensure_admin_role(&deps.as_ref(), sender, role)?;
-        Self::_set_admin_role(deps.storage, role, new_admin_role)
+        Self::storage_update_role(deps.storage, response_handler, role, new_admin_role)
     }
 
     pub fn ensure_has_role(deps: &Deps, role: &str, address: &Addr) -> StdResult<()> {
@@ -187,7 +227,13 @@ mod tests {
             DEFAULT_ADMIN_ROLE
         );
 
-        assert!(AccessControl::_set_admin_role(deps.as_mut().storage, &ROLE_A, &ROLE_B).is_ok());
+        assert!(AccessControl::storage_update_role(
+            deps.as_mut().storage,
+            &mut ResponseHandler::default(),
+            &ROLE_A,
+            &ROLE_B
+        )
+        .is_ok());
         assert_eq!(
             AccessControl::get_admin_role(deps.as_mut().storage, &ROLE_A).unwrap(),
             ROLE_B
@@ -207,15 +253,21 @@ mod tests {
         // Make creator the admin
         assert!(AccessControl::storage_grant_role(
             deps.as_mut().storage,
+            &mut ResponseHandler::default(),
             DEFAULT_ADMIN_ROLE,
             &creator
         )
         .is_ok());
 
         // Admin should be able to grant role
-        assert!(
-            AccessControl::grant_role(&mut deps.as_mut(), &creator, &str_role_a, &user).is_ok()
-        );
+        assert!(AccessControl::grant_role(
+            &mut deps.as_mut(),
+            &mut ResponseHandler::default(),
+            &creator,
+            &str_role_a,
+            &user
+        )
+        .is_ok());
 
         // Ensure the user has the role
         assert!(AccessControl::has_role(
@@ -236,15 +288,21 @@ mod tests {
         let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
         assert!(AccessControl::storage_grant_role(
             deps.as_mut().storage,
+            &mut ResponseHandler::default(),
             DEFAULT_ADMIN_ROLE,
             &creator
         )
         .is_ok());
 
         // Admin should be able to grant role
-        assert!(
-            AccessControl::grant_role(&mut deps.as_mut(), &creator, &str_role_a, &user).is_ok()
-        );
+        assert!(AccessControl::grant_role(
+            &mut deps.as_mut(),
+            &mut ResponseHandler::default(),
+            &creator,
+            &str_role_a,
+            &user
+        )
+        .is_ok());
 
         // Ensure the user has the role
         assert!(AccessControl::has_role(
@@ -254,9 +312,14 @@ mod tests {
         ));
 
         // Admin should be able to revoke role
-        assert!(
-            AccessControl::revoke_role(&mut deps.as_mut(), &creator, &str_role_a, &user).is_ok()
-        );
+        assert!(AccessControl::revoke_role(
+            &mut deps.as_mut(),
+            &mut ResponseHandler::default(),
+            &creator,
+            &str_role_a,
+            &user
+        )
+        .is_ok());
 
         // Ensure the user no longer has the role
         assert!(!AccessControl::has_role(
@@ -282,12 +345,18 @@ mod tests {
             DEFAULT_ADMIN_ROLE
         );
 
-        AccessControl::storage_grant_role(deps.as_mut().storage, DEFAULT_ADMIN_ROLE, &creator)
-            .unwrap();
+        AccessControl::storage_grant_role(
+            deps.as_mut().storage,
+            &mut ResponseHandler::default(),
+            DEFAULT_ADMIN_ROLE,
+            &creator,
+        )
+        .unwrap();
 
         // Change the role admin
         assert!(AccessControl::change_admin_role(
             deps.as_mut(),
+            &mut ResponseHandler::default(),
             &creator,
             &str_role_a,
             &str_role_b

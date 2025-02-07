@@ -1,4 +1,5 @@
 use crate::access_control::AccessControl;
+use crate::events::ResponseHandler;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
@@ -38,9 +39,13 @@ pub fn execute_grant_role_by_admin_role(
         required_sender_role,
         &info.sender,
     )?;
-    AccessControl::storage_grant_role(deps.storage, &role, &addr)?;
 
-    Ok(Response::new()
+    let mut response_handler = ResponseHandler::default();
+
+    AccessControl::storage_grant_role(deps.storage, &mut response_handler, &role, &addr)?;
+
+    Ok(response_handler
+        .into_response()
         .add_attribute("action", "grant_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role)
@@ -62,9 +67,12 @@ pub fn execute_revoke_role_by_admin_role(
         &info.sender,
     )?;
 
-    AccessControl::storage_remove_has_role(deps.storage, &role, &addr)?;
+    let mut response_handler = ResponseHandler::default();
 
-    Ok(Response::new()
+    AccessControl::storage_revoke_role(deps.storage, &mut response_handler, &role, &addr);
+
+    Ok(response_handler
+        .into_response()
         .add_attribute("action", "revoke_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role)
@@ -78,9 +86,13 @@ pub fn execute_renounce_role<T: Into<String>>(
     role: String,
 ) -> StdResult<Response> {
     AccessControl::ensure_has_role(&deps.as_ref(), &role, &info.sender)?;
-    AccessControl::storage_remove_has_role(deps.storage, &role, &info.sender)?;
 
-    Ok(Response::new()
+    let mut response_handler = ResponseHandler::default();
+
+    AccessControl::storage_revoke_role(deps.storage, &mut response_handler, &role, &info.sender);
+
+    Ok(response_handler
+        .into_response()
         .add_attribute("action", "renounce_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role))
