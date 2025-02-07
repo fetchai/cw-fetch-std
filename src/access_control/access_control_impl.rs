@@ -1,6 +1,4 @@
-use crate::access_control::error::{
-    insufficient_permissions_error, no_role_error, sender_is_not_role_admin_error,
-};
+use crate::access_control::error::{no_role_error, sender_is_not_role_admin_error};
 use crate::access_control::storage::AccessControlStorage;
 use crate::events::ResponseHandler;
 use crate::permissions::is_super_admin;
@@ -16,7 +14,7 @@ impl AccessControl {
             return Ok(());
         }
 
-        Err(sender_is_not_role_admin_error(&role))
+        Err(sender_is_not_role_admin_error(role))
     }
 
     pub fn grant_role(
@@ -67,7 +65,7 @@ impl AccessControl {
 
     pub fn ensure_has_role(storage: &dyn Storage, address: &Addr, role: &str) -> StdResult<()> {
         if !AccessControlStorage::has_role(storage, address, role) {
-            return Err(no_role_error(address, role));
+            return Err(no_role_error(address, Some(role)));
         }
 
         Ok(())
@@ -84,7 +82,7 @@ impl AccessControl {
         {
             Ok(())
         } else {
-            Err(no_role_error(address, role))
+            Err(no_role_error(address, Some(role)))
         }
     }
 
@@ -99,7 +97,7 @@ impl AccessControl {
             }
         }
 
-        Err(insufficient_permissions_error())
+        Err(no_role_error(address, None))
     }
 
     pub fn get_admin_role(storage: &dyn Storage, role: &str) -> StdResult<String> {

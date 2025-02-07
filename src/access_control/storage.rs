@@ -13,7 +13,6 @@ const HAS_ROLE: Map<(&str, &Addr), ()> = Map::new("has_role");
 pub(crate) struct AccessControlStorage {}
 
 impl AccessControlStorage {
-    #![allow(dead_code)]
     fn remove_role(storage: &mut dyn Storage, response_handler: &mut ResponseHandler, role: &str) {
         response_handler.add_event(AccessControlRoleRemovedEvent { role });
 
@@ -37,7 +36,7 @@ impl AccessControlStorage {
         )
     }
 
-    pub(crate) fn set_admin_role(
+    pub fn set_admin_role(
         storage: &mut dyn Storage,
         response_handler: &mut ResponseHandler,
         role: &str,
@@ -88,6 +87,7 @@ impl AccessControlStorage {
         HAS_ROLE.has(storage, (role, address))
     }
 
+    #[allow(dead_code)]
     pub fn range_all_addresses_with_role<'a>(
         storage: &'a dyn Storage,
         role: &str,
@@ -100,6 +100,7 @@ impl AccessControlStorage {
         ))
     }
 
+    #[allow(dead_code)]
     pub fn range_all_roles<'a>(
         storage: &'a dyn Storage,
     ) -> Box<dyn Iterator<Item = StdResult<String>> + 'a> {
