@@ -47,7 +47,7 @@ pub fn execute_grant_role(
         .add_attribute("action", "grant_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role)
-        .add_attribute("grant_to_address", grant_to_address.to_string()))
+        .add_attribute("addr", grant_to_address.to_string()))
 }
 
 pub fn execute_revoke_role(
@@ -72,7 +72,7 @@ pub fn execute_revoke_role(
         .add_attribute("action", "revoke_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role)
-        .add_attribute("address_to_revoke", address_to_revoke.to_string()))
+        .add_attribute("addr", address_to_revoke.to_string()))
 }
 
 pub fn execute_renounce_role<T: Into<String>>(
@@ -90,6 +90,7 @@ pub fn execute_renounce_role<T: Into<String>>(
     Ok(response_handler
         .into_response()
         .add_attribute("action", "renounce_role")
+        .add_attribute("sender", &info.sender)
         .add_attribute("role", role)
-        .add_attribute("sender", info.sender))
+        .add_attribute("addr", info.sender))
 }
