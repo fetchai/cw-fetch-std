@@ -15,7 +15,7 @@ pub struct QueryAdminRoleResponse {
 
 pub fn query_has_role(deps: Deps, addr: Addr, role: String) -> StdResult<QueryHasRoleResponse> {
     Ok(QueryHasRoleResponse {
-        has_role: AccessControl::has_role(deps.storage, &role, &addr),
+        has_role: AccessControl::has_role(deps.storage, &addr, &role),
     })
 }
 
@@ -25,7 +25,7 @@ pub fn query_admin_role(deps: Deps, role: String) -> StdResult<QueryAdminRoleRes
     })
 }
 
-pub fn execute_grant_role_by_admin_role(
+pub fn execute_grant_role(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -42,7 +42,7 @@ pub fn execute_grant_role_by_admin_role(
 
     let mut response_handler = ResponseHandler::default();
 
-    AccessControl::storage_grant_role(deps.storage, &mut response_handler, &role, &addr)?;
+    AccessControl::_grant_role_unrestricted(deps.storage, &mut response_handler, &role, &addr)?;
 
     Ok(response_handler
         .into_response()
@@ -52,24 +52,22 @@ pub fn execute_grant_role_by_admin_role(
         .add_attribute("addr", addr.to_string()))
 }
 
-pub fn execute_revoke_role_by_admin_role(
+pub fn execute_revoke_role(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     role: String,
     addr: Addr,
-    required_sender_role: &str,
 ) -> StdResult<Response> {
-    AccessControl::ensure_has_role_or_superadmin(
-        &deps.as_ref(),
-        &env,
-        required_sender_role,
-        &info.sender,
-    )?;
-
     let mut response_handler = ResponseHandler::default();
 
-    AccessControl::storage_revoke_role(deps.storage, &mut response_handler, &role, &addr);
+    AccessControl::revoke_role(
+        deps.storage,
+        &mut response_handler,
+        &info.sender,
+        &role,
+        &addr,
+    )?;
 
     Ok(response_handler
         .into_response()
@@ -85,11 +83,11 @@ pub fn execute_renounce_role<T: Into<String>>(
     info: MessageInfo,
     role: String,
 ) -> StdResult<Response> {
-    AccessControl::ensure_has_role(&deps.as_ref(), &role, &info.sender)?;
+    AccessControl::ensure_has_role(deps.as_ref().storage, &info.sender, &role)?;
 
     let mut response_handler = ResponseHandler::default();
 
-    AccessControl::storage_revoke_role(deps.storage, &mut response_handler, &role, &info.sender);
+    AccessControl::renounce_role(deps.storage, &mut response_handler, &info.sender, &role)?;
 
     Ok(response_handler
         .into_response()
