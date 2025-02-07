@@ -104,7 +104,7 @@ impl AccessControl {
         AccessControlStorage::get_admin_role(storage, role)
     }
 
-    pub fn has_role(storage: &dyn Storage, address: &Addr, role: &str) -> bool {
+    pub fn has_role(storage: &dyn Storage, role: &str, address: &Addr) -> bool {
         AccessControlStorage::has_role(storage, address, role)
     }
 
@@ -201,8 +201,8 @@ mod tests {
         // Ensure the user has the role
         assert!(AccessControl::has_role(
             deps.as_mut().storage,
-            &user,
             &str_role_a,
+            &user,
         ));
     }
 
@@ -236,8 +236,8 @@ mod tests {
         // Ensure the user has the role
         assert!(AccessControl::has_role(
             deps.as_mut().storage,
-            &user,
             &str_role_a,
+            &user,
         ));
 
         // Admin should be able to revoke role
@@ -253,8 +253,8 @@ mod tests {
         // Ensure the user no longer has the role
         assert!(!AccessControl::has_role(
             deps.as_mut().storage,
-            &user,
             &str_role_a,
+            &user,
         ));
     }
 
