@@ -3,7 +3,7 @@ use cosmwasm_std::{StdError, StdResult};
 
 const ERR_NOT_SUPER_ADMIN: &str = "[FET_ERR_NOT_SUPER_ADMIN] Sender is not a super-admin.";
 
-// Check if the address is admin of the contract, everyone cannot be admin of the contract
+// Check if the address is admin of the contract
 pub fn is_super_admin(deps: &Deps, env: &Env, address: &Addr) -> StdResult<bool> {
     // Check if the address is specified (opposite of the Everyone case)
     if let Some(admin_address) = deps
