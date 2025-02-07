@@ -75,7 +75,7 @@ pub fn execute_revoke_role(
         .add_attribute("addr", address_to_revoke.to_string()))
 }
 
-pub fn execute_renounce_role<T: Into<String>>(
+pub fn execute_renounce_role(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
