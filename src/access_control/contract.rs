@@ -27,29 +27,27 @@ pub fn query_admin_role(deps: Deps, role: String) -> StdResult<QueryAdminRoleRes
 
 pub fn execute_grant_role(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     role: String,
-    addr: Addr,
-    required_sender_role: &str,
+    grant_to_address: Addr,
 ) -> StdResult<Response> {
-    AccessControl::ensure_has_role_or_superadmin(
-        &deps.as_ref(),
-        &env,
-        required_sender_role,
-        &info.sender,
-    )?;
-
     let mut response_handler = ResponseHandler::default();
 
-    AccessControl::_grant_role_unrestricted(deps.storage, &mut response_handler, &role, &addr)?;
+    AccessControl::grant_role(
+        deps.storage,
+        &mut response_handler,
+        &info.sender,
+        &role,
+        &grant_to_address,
+    )?;
 
     Ok(response_handler
         .into_response()
         .add_attribute("action", "grant_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role)
-        .add_attribute("addr", addr.to_string()))
+        .add_attribute("grant_to_address", grant_to_address.to_string()))
 }
 
 pub fn execute_revoke_role(
@@ -57,7 +55,7 @@ pub fn execute_revoke_role(
     _env: Env,
     info: MessageInfo,
     role: String,
-    addr: Addr,
+    address_to_revoke: Addr,
 ) -> StdResult<Response> {
     let mut response_handler = ResponseHandler::default();
 
@@ -66,7 +64,7 @@ pub fn execute_revoke_role(
         &mut response_handler,
         &info.sender,
         &role,
-        &addr,
+        &address_to_revoke,
     )?;
 
     Ok(response_handler
@@ -74,7 +72,7 @@ pub fn execute_revoke_role(
         .add_attribute("action", "revoke_role")
         .add_attribute("sender", info.sender)
         .add_attribute("role", role)
-        .add_attribute("addr", addr.to_string()))
+        .add_attribute("address_to_revoke", address_to_revoke.to_string()))
 }
 
 pub fn execute_renounce_role<T: Into<String>>(
@@ -92,6 +90,6 @@ pub fn execute_renounce_role<T: Into<String>>(
     Ok(response_handler
         .into_response()
         .add_attribute("action", "renounce_role")
-        .add_attribute("sender", info.sender)
-        .add_attribute("role", role))
+        .add_attribute("role", role)
+        .add_attribute("sender", info.sender))
 }
