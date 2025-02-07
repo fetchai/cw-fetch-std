@@ -370,71 +370,27 @@ mod tests {
         );
     }
 
-    /*
-
     #[test]
     fn test_ensure_role_admin() {
-     let creator = Addr::unchecked("owner".to_string());
-     let other = Addr::unchecked("other".to_string());
-     let role = TestRole::RoleA;
+        let creator = Addr::unchecked("owner".to_string());
+        let other = Addr::unchecked("other".to_string());
 
-     let env = mock_env();
-     let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
+        let env = mock_env();
+        let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
 
-     // Create the role and set admin
-     assert!(AccessControl::create_role(deps.as_mut().storage, &role, Some(&creator)).is_ok());
+        // Create the role and set admin
+        AccessControl::storage_grant_role(
+            deps.as_mut().storage,
+            &mut ResponseHandler::default(),
+            DEFAULT_ADMIN_ROLE,
+            &creator,
+        )
+        .unwrap();
 
-     // Ensure role admin passes for the correct admin
-     assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &creator, &role).is_ok());
+        // Ensure role admin passes for the correct admin
+        assert!(AccessControl::ensure_admin_role(&deps.as_ref(), &creator, &ROLE_A).is_ok());
 
-     // Ensure role admin fails for someone who is not the admin
-     assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &other, &role).is_err());
+        // Ensure role admin fails for someone who is not the admin
+        assert!(AccessControl::ensure_admin_role(&deps.as_ref(), &other, &ROLE_A).is_err());
     }
-
-    #[test]
-    fn test_super_admin() {
-     let creator = Addr::unchecked("owner".to_string());
-     let role_admin = Addr::unchecked("role_admin".to_string());
-     let other = Addr::unchecked("other".to_string());
-
-     let role = TestRole::RoleA;
-
-     let env = mock_env();
-     let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
-
-     // Create the role and set admin
-     assert!(
-         AccessControl::create_role(deps.as_mut().storage, &role, Some(&role_admin)).is_ok()
-     );
-
-     // Ensure role admin passes for the correct admin
-     assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &role_admin, &role).is_ok());
-
-     // Super-admin is not role admin
-     assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &creator, &role).is_err());
-
-     // Ensure role admin fails for someone who is not the admin
-     assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &other, &role).is_err());
-    }
-
-    #[test]
-    fn test_no_admin_role() {
-     let creator = Addr::unchecked("owner".to_string());
-     let other = Addr::unchecked("other".to_string());
-
-     let role = TestRole::RoleA;
-
-     let env = mock_env();
-     let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
-
-     // Create the role and set admin
-     assert!(AccessControl::create_role(deps.as_mut().storage, &role, None).is_ok());
-
-     // Super-admin is not role admin
-     assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &creator, &role).is_err());
-
-     // Ensure role admin fails for someone who is not the admin
-     assert!(AccessControl::ensure_role_admin(&deps.as_ref(), &other, &role).is_err());
-    }
-    */
 }
