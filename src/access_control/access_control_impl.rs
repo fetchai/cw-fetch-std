@@ -47,7 +47,7 @@ impl AccessControl {
         sender: &Addr,
         role: &str,
     ) -> StdResult<()> {
-        Self::ensure_has_role(storage, sender, role)?;
+        Self::ensure_has_role(storage, role, sender)?;
         AccessControlStorage::revoke_role(storage, response_handler, role, sender);
         Ok(())
     }
@@ -63,7 +63,7 @@ impl AccessControl {
         AccessControlStorage::set_admin_role(storage, response_handler, role, new_admin_role)
     }
 
-    pub fn ensure_has_role(storage: &dyn Storage, address: &Addr, role: &str) -> StdResult<()> {
+    pub fn ensure_has_role(storage: &dyn Storage, role: &str, address: &Addr) -> StdResult<()> {
         if !AccessControlStorage::has_role(storage, address, role) {
             return Err(no_role_error(address, Some(role)));
         }
@@ -112,9 +112,9 @@ impl AccessControl {
         storage: &mut dyn Storage,
         response_handler: &mut ResponseHandler,
         role: &str,
-        addr: &Addr,
+        grant_to_address: &Addr,
     ) -> StdResult<()> {
-        AccessControlStorage::grant_role(storage, response_handler, role, addr)
+        AccessControlStorage::grant_role(storage, response_handler, role, grant_to_address)
     }
 }
 
