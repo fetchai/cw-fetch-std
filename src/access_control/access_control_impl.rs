@@ -7,10 +7,10 @@ use cosmwasm_std::{Addr, Deps, Env, StdResult, Storage};
 pub struct AccessControl {}
 
 impl AccessControl {
-    pub fn ensure_is_admin(storage: &dyn Storage, sender: &Addr, role: &str) -> StdResult<()> {
+    pub fn ensure_is_admin(storage: &dyn Storage, role: &str, sender: &Addr) -> StdResult<()> {
         let admin_role = AccessControlStorage::get_admin_role(storage, role)?;
 
-        if AccessControlStorage::has_role(storage, sender, &admin_role) {
+        if AccessControlStorage::has_role(storage, &admin_role, sender) {
             return Ok(());
         }
 
@@ -24,7 +24,7 @@ impl AccessControl {
         role: &str,
         grant_to_address: &Addr,
     ) -> StdResult<()> {
-        Self::ensure_is_admin(storage, sender, role)?;
+        Self::ensure_is_admin(storage, role, sender)?;
         AccessControlStorage::grant_role(storage, response_handler, role, grant_to_address)?;
         Ok(())
     }
@@ -36,7 +36,7 @@ impl AccessControl {
         role: &str,
         address_to_revoke: &Addr,
     ) -> StdResult<()> {
-        Self::ensure_is_admin(storage, sender, role)?;
+        Self::ensure_is_admin(storage, role, sender)?;
         AccessControlStorage::revoke_role(storage, response_handler, role, address_to_revoke);
         Ok(())
     }
@@ -59,12 +59,12 @@ impl AccessControl {
         role: &str,
         new_admin_role: &str,
     ) -> StdResult<()> {
-        Self::ensure_is_admin(storage, sender, role)?;
+        Self::ensure_is_admin(storage, role, sender)?;
         AccessControlStorage::set_admin_role(storage, response_handler, role, new_admin_role)
     }
 
     pub fn ensure_has_role(storage: &dyn Storage, role: &str, address: &Addr) -> StdResult<()> {
-        if !AccessControlStorage::has_role(storage, address, role) {
+        if !AccessControlStorage::has_role(storage, role, address) {
             return Err(no_role_error(address, Some(role)));
         }
 
@@ -77,7 +77,7 @@ impl AccessControl {
         role: &str,
         address: &Addr,
     ) -> StdResult<()> {
-        if AccessControlStorage::has_role(deps.storage, address, role)
+        if AccessControlStorage::has_role(deps.storage, role, address)
             || is_super_admin(deps, env, address)?
         {
             Ok(())
@@ -92,7 +92,7 @@ impl AccessControl {
         address: &Addr,
     ) -> StdResult<()> {
         for role in roles {
-            if AccessControlStorage::has_role(storage, address, role) {
+            if AccessControlStorage::has_role(storage, role, address) {
                 return Ok(());
             }
         }
@@ -105,7 +105,7 @@ impl AccessControl {
     }
 
     pub fn has_role(storage: &dyn Storage, role: &str, address: &Addr) -> bool {
-        AccessControlStorage::has_role(storage, address, role)
+        AccessControlStorage::has_role(storage, role, address)
     }
 
     pub fn _grant_role_unrestricted(
@@ -307,7 +307,7 @@ mod tests {
         let env = mock_env();
         let mut deps = deps_with_creator(creator.clone(), env.contract.address.clone());
 
-        assert!(AccessControl::ensure_is_admin(deps.as_ref().storage, &creator, &ROLE_A).is_err());
+        assert!(AccessControl::ensure_is_admin(deps.as_ref().storage, &ROLE_A, &creator).is_err());
 
         // Give creator admin role
         assert!(AccessControl::_grant_role_unrestricted(
@@ -319,10 +319,10 @@ mod tests {
         .is_ok());
 
         // Ensure role admin passes for the correct admin
-        assert!(AccessControl::ensure_is_admin(deps.as_ref().storage, &creator, &ROLE_A).is_ok());
+        assert!(AccessControl::ensure_is_admin(deps.as_ref().storage, &ROLE_A, &creator).is_ok());
 
         // Ensure role admin fails for someone who is not the admin
-        assert!(AccessControl::ensure_is_admin(deps.as_ref().storage, &other, &ROLE_A).is_err());
+        assert!(AccessControl::ensure_is_admin(deps.as_ref().storage, &ROLE_A, &other).is_err());
 
         // Test revoke
         assert_eq!(
@@ -345,7 +345,7 @@ mod tests {
         )
         .is_ok());
 
-        assert!(AccessControl::ensure_is_admin(deps.as_ref().storage, &creator, &ROLE_A).is_err());
+        assert!(AccessControl::ensure_is_admin(deps.as_ref().storage, &ROLE_A, &creator).is_err());
     }
 
     #[test]

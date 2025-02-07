@@ -83,7 +83,7 @@ impl AccessControlStorage {
         Ok(ROLE.may_load(storage, role)?.unwrap_or_default().admin_role)
     }
 
-    pub fn has_role(storage: &dyn Storage, address: &Addr, role: &str) -> bool {
+    pub fn has_role(storage: &dyn Storage, role: &str, address: &Addr) -> bool {
         HAS_ROLE.has(storage, (role, address))
     }
 
