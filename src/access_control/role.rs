@@ -1,6 +1,6 @@
 use cosmwasm_schema::cw_serde;
 
-pub const DEFAULT_ADMIN_ROLE: &str = "";
+pub const DEFAULT_ADMIN_ROLE: &str = "admin";
 
 #[cw_serde]
 pub struct RoleData {
