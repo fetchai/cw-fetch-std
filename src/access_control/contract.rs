@@ -81,8 +81,6 @@ pub fn execute_renounce_role(
     info: MessageInfo,
     role: String,
 ) -> StdResult<Response> {
-    AccessControl::ensure_has_role(deps.as_ref().storage, &role, &info.sender)?;
-
     let mut response_handler = ResponseHandler::default();
 
     AccessControl::renounce_role(deps.storage, &mut response_handler, &info.sender, &role)?;
