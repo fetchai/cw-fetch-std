@@ -51,7 +51,7 @@ pub fn handle_access_control_query_msg(
 ) -> StdResult<Binary> {
     match msg {
         AccessControlQueryMsg::QueryAdminRole { role } => {
-            Ok(to_json_binary(&query_admin_role(deps, role)?)?)
+            to_json_binary(&query_admin_role(deps, role)?)
         }
         AccessControlQueryMsg::QueryHasRole { addr, role } => {
             to_json_binary(&query_has_role(deps, role, addr)?)
