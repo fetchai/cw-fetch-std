@@ -43,6 +43,7 @@ pub enum AccessControlQueryMsg {
     QueryHasRole { addr: Addr, role: String },
 }
 
+#[cw_serde]
 pub enum AccessControlQueryResponse {
     QueryAdminRole(QueryAdminRoleResponse),
     QueryHasRole(QueryHasRoleResponse),
