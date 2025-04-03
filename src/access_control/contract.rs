@@ -12,7 +12,6 @@ pub struct QueryHasRoleResponse {
 pub struct QueryAdminRoleResponse {
     pub admin_role: String,
 }
-
 pub fn query_has_role(deps: Deps, role: String, addr: Addr) -> StdResult<QueryHasRoleResponse> {
     Ok(QueryHasRoleResponse {
         has_role: AccessControl::has_role(deps.storage, &role, &addr),
