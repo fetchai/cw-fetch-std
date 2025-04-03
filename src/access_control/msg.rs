@@ -4,9 +4,7 @@ use crate::access_control::{
 };
 use crate::access_control::{QueryAdminRoleResponse, QueryHasRoleResponse};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{
-    to_json_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
-};
+use cosmwasm_std::{Addr, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
 #[cw_serde]
 pub enum AccessControlExecuteMsg {
@@ -44,17 +42,23 @@ pub enum AccessControlQueryMsg {
     #[returns(QueryHasRoleResponse)]
     QueryHasRole { addr: Addr, role: String },
 }
+
+pub enum AccessControlQueryResponse {
+    QueryAdminRole(QueryAdminRoleResponse),
+    QueryHasRole(QueryHasRoleResponse),
+}
+
 pub fn handle_access_control_query_msg(
     deps: Deps,
     _env: Env,
     msg: AccessControlQueryMsg,
-) -> StdResult<Binary> {
+) -> StdResult<AccessControlQueryResponse> {
     match msg {
         AccessControlQueryMsg::QueryAdminRole { role } => {
-            to_json_binary(&query_admin_role(deps, role)?)
+            query_admin_role(deps, role).map(AccessControlQueryResponse::QueryAdminRole)
         }
         AccessControlQueryMsg::QueryHasRole { addr, role } => {
-            to_json_binary(&query_has_role(deps, role, addr)?)
+            query_has_role(deps, role, addr).map(AccessControlQueryResponse::QueryHasRole)
         }
     }
 }
