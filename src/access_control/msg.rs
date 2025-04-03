@@ -16,7 +16,7 @@ pub enum AccessControlExecuteMsg {
 
     RenounceRole { role: String },
 }
-pub fn handle_access_control_msg(
+pub fn handle_access_control_execute_msg(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
