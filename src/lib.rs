@@ -8,4 +8,5 @@ pub mod permissions;
 pub mod storage;
 pub mod testing;
 
+extern crate serde_cw_value;
 pub use untagged_derive;

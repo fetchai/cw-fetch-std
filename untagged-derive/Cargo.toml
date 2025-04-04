@@ -9,5 +9,3 @@ proc-macro = true
 [dependencies]
 quote = "1"
 syn = { version = "2", features = ["full"] }
-serde-cw-value = { version = "0.7.0" }
-serde = { version = "1.0.145", default-features = false, features = ["derive"] }

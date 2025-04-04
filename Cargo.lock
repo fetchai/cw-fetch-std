@@ -730,8 +730,6 @@ name = "untagged-derive"
 version = "0.1.0"
 dependencies = [
  "quote",
- "serde",
- "serde-cw-value",
  "syn 2.0.100",
 ]
 
