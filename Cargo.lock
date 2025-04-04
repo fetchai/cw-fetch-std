@@ -210,8 +210,10 @@ dependencies = [
  "hex",
  "ripemd",
  "serde",
+ "serde-cw-value",
  "sha2 0.10.8",
  "tiny-keccak",
+ "untagged-derive",
 ]
 
 [[package]]
@@ -548,6 +550,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-cw-value"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a75d32da6b8ed758b7d850b6c3c08f1d7df51a4df3cb201296e63e34a78e99d4"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde-json-wasm"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -707,6 +718,14 @@ name = "unicode-ident"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
+
+[[package]]
+name = "untagged-derive"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn 2.0.52",
+]
 
 [[package]]
 name = "version_check"
