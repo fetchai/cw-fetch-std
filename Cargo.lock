@@ -210,7 +210,6 @@ dependencies = [
  "hex",
  "ripemd",
  "serde",
- "serde-cw-value",
  "sha2 0.10.8",
  "tiny-keccak",
  "untagged-derive",
@@ -724,6 +723,8 @@ name = "untagged-derive"
 version = "0.1.0"
 dependencies = [
  "quote",
+ "serde",
+ "serde-cw-value",
  "syn 2.0.52",
 ]
 

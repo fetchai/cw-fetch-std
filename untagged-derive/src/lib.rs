@@ -2,6 +2,8 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput};
+extern crate serde_cw_value;
+extern crate serde;
 
 #[proc_macro_derive(GenericUntaggedEnum)]
 pub fn derive_generic_untagged_enum(input: TokenStream) -> TokenStream {
