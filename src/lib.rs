@@ -7,3 +7,5 @@ pub mod pausing;
 pub mod permissions;
 pub mod storage;
 pub mod testing;
+
+pub use query_responses_hybrid_derive;
