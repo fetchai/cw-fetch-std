@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
-// This code is based on https://github.com/CosmWasm/cosmwasm/blob/main/packages/schema-derive/src/query_responses.rs
+// This code is based on https://github.com/CosmWasm/cosmwasm/blob/v1.5.3/packages/schema-derive/src/query_responses.rs
 
 #[proc_macro_derive(QueryResponsesHybrid, attributes(returns, nested))]
 pub fn derive_query_responses_hybrid(input: TokenStream) -> TokenStream {
