@@ -41,11 +41,11 @@ pub fn deps_with_creator(
     deps.querier = querier;
     deps
 }
-pub fn assert_err<T, E: std::fmt::Debug>(result: &Result<T, E>, error: &E) {
+pub fn assert_err<T, E: std::fmt::Display>(result: &Result<T, E>, error: &E) {
     // Check if result contains specific error
     match result {
         Ok(_) => panic!("Expected Err, got Ok"),
-        Err(res_error) => assert_eq!(format!("{:?}", res_error), format!("{:?}", error)),
+        Err(res_error) => assert_eq!(res_error.to_string(), error.to_string()),
     }
 }
 
