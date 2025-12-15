@@ -34,12 +34,12 @@ pub fn encode_bech32(prefix: &str, data: &[u8]) -> Result<String, StdError> {
 
 // Errors
 pub fn prefix_error(expected: &str, actual: &str) -> StdError {
-    StdError::generic_err(format!(
+    StdError::msg(format!(
         "Wrong prefix. Expected {}, got {}.",
         expected, actual
     ))
 }
 
 pub fn base32_parsing_error<T: std::fmt::Display>(err: &T) -> StdError {
-    StdError::generic_err(format!("Base32 parsing failed: {}", err))
+    StdError::msg(format!("Base32 parsing failed: {}", err))
 }

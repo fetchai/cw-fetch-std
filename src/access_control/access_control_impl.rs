@@ -333,8 +333,9 @@ mod tests {
                 &DEFAULT_ADMIN_ROLE,
                 &creator
             )
-            .unwrap_err(),
-            sender_is_not_role_admin_error(&DEFAULT_ADMIN_ROLE)
+            .unwrap_err()
+            .to_string(),
+            sender_is_not_role_admin_error(&DEFAULT_ADMIN_ROLE).to_string()
         );
         assert!(AccessControl::revoke_role(
             deps.as_mut().storage,
@@ -400,8 +401,9 @@ mod tests {
                 DEFAULT_ADMIN_ROLE,
                 &creator
             )
-            .unwrap_err(),
-            sender_is_not_role_admin_error(&DEFAULT_ADMIN_ROLE)
+            .unwrap_err()
+            .to_string(),
+            sender_is_not_role_admin_error(&DEFAULT_ADMIN_ROLE).to_string()
         );
 
         assert!(AccessControl::renounce_role(
@@ -420,8 +422,9 @@ mod tests {
                 DEFAULT_ADMIN_ROLE,
                 &user2
             )
-            .unwrap_err(),
-            sender_is_not_role_admin_error(&DEFAULT_ADMIN_ROLE)
+            .unwrap_err()
+            .to_string(),
+            sender_is_not_role_admin_error(&DEFAULT_ADMIN_ROLE).to_string()
         );
 
         assert!(AccessControl::revoke_role(
