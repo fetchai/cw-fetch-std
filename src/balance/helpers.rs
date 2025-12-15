@@ -1,4 +1,4 @@
-use cosmwasm_std::{Coin, StdError, StdResult, Uint128};
+use cosmwasm_std::{Coin, StdError, StdResult, Uint256};
 use std::collections::btree_map::Entry;
 use std::collections::btree_map::OccupiedEntry;
 use std::collections::BTreeMap;
@@ -7,13 +7,13 @@ pub trait BTreeMapCoinHelpers {
     fn into_vec(self) -> Vec<Coin>;
     fn inplace_sub<'a, I>(&mut self, balance: I) -> StdResult<()>
     where
-        I: IntoIterator<Item = (&'a String, &'a Uint128)>;
+        I: IntoIterator<Item = (&'a String, &'a Uint256)>;
 
     fn inplace_add<'a, I>(&mut self, balance: I) -> StdResult<()>
     where
-        I: IntoIterator<Item = (&'a String, &'a Uint128)>;
+        I: IntoIterator<Item = (&'a String, &'a Uint256)>;
 }
-impl BTreeMapCoinHelpers for BTreeMap<String, Uint128> {
+impl BTreeMapCoinHelpers for BTreeMap<String, Uint256> {
     fn into_vec(self) -> Vec<Coin> {
         self.into_iter()
             .map(|(denom, amount)| Coin { denom, amount })
@@ -22,24 +22,24 @@ impl BTreeMapCoinHelpers for BTreeMap<String, Uint128> {
 
     fn inplace_sub<'a, I>(&mut self, balance: I) -> StdResult<()>
     where
-        I: IntoIterator<Item = (&'a String, &'a Uint128)>,
+        I: IntoIterator<Item = (&'a String, &'a Uint256)>,
     {
         // Decrease total remaining supply
         for (denom, amount) in balance {
             if let Some(r) = self.get_mut(denom) {
                 if amount > r {
-                    return Err(StdError::generic_err(format!(
+                    return Err(StdError::msg(format!(
                         "Subtract overflow for denom: {}",
                         denom
                     )));
                 }
                 *r -= amount;
             } else {
-                return Err(StdError::generic_err(format!("Unknown denom {}", denom)));
+                return Err(StdError::msg(format!("Unknown denom {}", denom)));
             }
 
             // Remove denom if balance is now 0
-            if self.get(denom) == Some(&Uint128::zero()) {
+            if self.get(denom) == Some(&Uint256::zero()) {
                 self.remove(denom);
             }
         }
@@ -48,12 +48,12 @@ impl BTreeMapCoinHelpers for BTreeMap<String, Uint128> {
 
     fn inplace_add<'a, I>(&mut self, balance: I) -> StdResult<()>
     where
-        I: IntoIterator<Item = (&'a String, &'a Uint128)>,
+        I: IntoIterator<Item = (&'a String, &'a Uint256)>,
     {
         for (denom, amount) in balance {
             if let Some(counter) = self.get_mut(denom) {
                 *counter = counter.checked_add(*amount).map_err(|_| {
-                    StdError::generic_err(format!("Addition overflow for denom: {}", denom))
+                    StdError::msg(format!("Addition overflow for denom: {}", denom))
                 })?;
             } else {
                 self.insert(denom.clone(), *amount);
@@ -64,28 +64,28 @@ impl BTreeMapCoinHelpers for BTreeMap<String, Uint128> {
 }
 
 pub trait VecCoinConversions {
-    fn to_tuple_iterator<'a>(&'a self) -> Box<dyn Iterator<Item = (&'a String, &'a Uint128)> + 'a>;
+    fn to_tuple_iterator<'a>(&'a self) -> Box<dyn Iterator<Item = (&'a String, &'a Uint256)> + 'a>;
     fn into_map_with_duplicities<F>(
         self,
         handle_duplicate: F,
-    ) -> StdResult<BTreeMap<String, Uint128>>
+    ) -> StdResult<BTreeMap<String, Uint256>>
     where
-        F: Fn(OccupiedEntry<String, Uint128>, Uint128) -> StdResult<()>;
-    fn into_map(self) -> StdResult<BTreeMap<String, Uint128>>;
+        F: Fn(OccupiedEntry<String, Uint256>, Uint256) -> StdResult<()>;
+    fn into_map(self) -> StdResult<BTreeMap<String, Uint256>>;
     fn to_formatted_string(&self) -> String;
 }
 
 impl VecCoinConversions for Vec<Coin> {
-    fn to_tuple_iterator<'a>(&'a self) -> Box<dyn Iterator<Item = (&'a String, &'a Uint128)> + 'a> {
+    fn to_tuple_iterator<'a>(&'a self) -> Box<dyn Iterator<Item = (&'a String, &'a Uint256)> + 'a> {
         Box::new(self.iter().map(|coin| (&coin.denom, &coin.amount)))
     }
 
     fn into_map_with_duplicities<F>(
         self,
         handle_duplicate: F,
-    ) -> StdResult<BTreeMap<String, Uint128>>
+    ) -> StdResult<BTreeMap<String, Uint256>>
     where
-        F: Fn(OccupiedEntry<String, Uint128>, Uint128) -> StdResult<()>,
+        F: Fn(OccupiedEntry<String, Uint256>, Uint256) -> StdResult<()>,
     {
         let mut denom_map = BTreeMap::new();
 
@@ -103,12 +103,9 @@ impl VecCoinConversions for Vec<Coin> {
         Ok(denom_map)
     }
 
-    fn into_map(self) -> StdResult<BTreeMap<String, Uint128>> {
+    fn into_map(self) -> StdResult<BTreeMap<String, Uint256>> {
         self.into_map_with_duplicities(|e, _| {
-            Err(StdError::generic_err(format!(
-                "Duplicate denom found: {}",
-                e.key()
-            )))
+            Err(StdError::msg(format!("Duplicate denom found: {}", e.key())))
         })
     }
 
@@ -123,14 +120,14 @@ impl VecCoinConversions for Vec<Coin> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::{coin, Uint128};
+    use cosmwasm_std::coin;
     use std::collections::BTreeMap;
 
     #[test]
     fn test_into_vec() {
         let mut map = BTreeMap::new();
-        map.insert("atom".to_string(), Uint128::new(100));
-        map.insert("btc".to_string(), Uint128::new(50));
+        map.insert("atom".to_string(), Uint256::new(100));
+        map.insert("btc".to_string(), Uint256::new(50));
 
         let vec = map.into_vec();
         assert_eq!(vec, vec![coin(100, "atom"), coin(50, "btc")]);
@@ -139,50 +136,50 @@ mod tests {
     #[test]
     fn test_inplace_sub() {
         let mut map = BTreeMap::new();
-        map.insert("atom".to_string(), Uint128::new(100));
-        map.insert("btc".to_string(), Uint128::new(50));
+        map.insert("atom".to_string(), Uint256::new(100));
+        map.insert("btc".to_string(), Uint256::new(50));
 
         let balance = vec![
-            ("atom".to_string(), Uint128::new(30)),
-            ("btc".to_string(), Uint128::new(20)),
+            ("atom".to_string(), Uint256::new(30)),
+            ("btc".to_string(), Uint256::new(20)),
         ];
         map.inplace_sub(balance.iter().map(|(d, a)| (d, a)))
             .unwrap();
 
-        assert_eq!(map.get("atom"), Some(&Uint128::new(70)));
-        assert_eq!(map.get("btc"), Some(&Uint128::new(30)));
+        assert_eq!(map.get("atom"), Some(&Uint256::new(70)));
+        assert_eq!(map.get("btc"), Some(&Uint256::new(30)));
     }
 
     #[test]
     fn test_inplace_sub_overflow() {
         let mut map = BTreeMap::new();
-        map.insert("atom".to_string(), Uint128::new(100));
+        map.insert("atom".to_string(), Uint256::new(100));
 
-        let balance = vec![("atom".to_string(), Uint128::new(150))];
+        let balance = vec![("atom".to_string(), Uint256::new(150))];
         let result = map.inplace_sub(balance.iter().map(|(d, a)| (d, a)));
 
         assert_eq!(
-            result.err(),
-            Some(StdError::generic_err("Subtract overflow for denom: atom"))
+            result.err().unwrap().to_string(),
+            StdError::msg("Subtract overflow for denom: atom").to_string()
         );
     }
 
     #[test]
     fn test_inplace_add() {
         let mut map = BTreeMap::new();
-        map.insert("atom".to_string(), Uint128::new(100));
-        map.insert("btc".to_string(), Uint128::new(50));
+        map.insert("atom".to_string(), Uint256::new(100));
+        map.insert("btc".to_string(), Uint256::new(50));
 
         let balance = vec![
-            ("atom".to_string(), Uint128::new(30)),
-            ("btc".to_string(), Uint128::new(20)),
-            ("eth".to_string(), Uint128::new(10)),
+            ("atom".to_string(), Uint256::new(30)),
+            ("btc".to_string(), Uint256::new(20)),
+            ("eth".to_string(), Uint256::new(10)),
         ];
         assert!(map.inplace_add(balance.iter().map(|(d, a)| (d, a))).is_ok());
 
-        assert_eq!(map.get("atom"), Some(&Uint128::new(130)));
-        assert_eq!(map.get("btc"), Some(&Uint128::new(70)));
-        assert_eq!(map.get("eth"), Some(&Uint128::new(10)));
+        assert_eq!(map.get("atom"), Some(&Uint256::new(130)));
+        assert_eq!(map.get("btc"), Some(&Uint256::new(70)));
+        assert_eq!(map.get("eth"), Some(&Uint256::new(10)));
     }
 
     #[test]
@@ -190,8 +187,8 @@ mod tests {
         let vec = vec![coin(100, "atom"), coin(50, "btc")];
         let mut iter = vec.to_tuple_iterator();
 
-        assert_eq!(iter.next(), Some((&"atom".to_string(), &Uint128::new(100))));
-        assert_eq!(iter.next(), Some((&"btc".to_string(), &Uint128::new(50))));
+        assert_eq!(iter.next(), Some((&"atom".to_string(), &Uint256::new(100))));
+        assert_eq!(iter.next(), Some((&"btc".to_string(), &Uint256::new(50))));
         assert_eq!(iter.next(), None);
     }
 
@@ -202,8 +199,8 @@ mod tests {
             .into_map_with_duplicities(|mut e, new_value| Ok(*e.get_mut() += new_value))
             .unwrap();
 
-        assert_eq!(map.get("atom"), Some(&Uint128::new(100)));
-        assert_eq!(map.get("btc"), Some(&Uint128::new(100)));
+        assert_eq!(map.get("atom"), Some(&Uint256::new(100)));
+        assert_eq!(map.get("btc"), Some(&Uint256::new(100)));
     }
 
     #[test]
@@ -221,9 +218,9 @@ mod tests {
         let balance = vec![coin(30, "atom"), coin(20, "btc"), coin(10, "eth")];
         assert!(map.inplace_add(balance.to_tuple_iterator()).is_ok());
 
-        assert_eq!(map.get("atom"), Some(&Uint128::new(30)));
-        assert_eq!(map.get("btc"), Some(&Uint128::new(20)));
-        assert_eq!(map.get("eth"), Some(&Uint128::new(10)));
+        assert_eq!(map.get("atom"), Some(&Uint256::new(30)));
+        assert_eq!(map.get("btc"), Some(&Uint256::new(20)));
+        assert_eq!(map.get("eth"), Some(&Uint256::new(10)));
 
         assert!(map.inplace_sub(balance.to_tuple_iterator()).is_ok());
 
@@ -232,32 +229,32 @@ mod tests {
     #[test]
     fn test_subtracting_nonexistent_denom() {
         let mut map = BTreeMap::new();
-        map.insert("atom".to_string(), Uint128::new(100));
+        map.insert("atom".to_string(), Uint256::new(100));
 
-        let balance = vec![("btc".to_string(), Uint128::new(50))];
+        let balance = vec![("btc".to_string(), Uint256::new(50))];
         let result = map.inplace_sub(balance.iter().map(|(d, a)| (d, a)));
 
         assert!(result.is_err());
         assert_eq!(
-            result.err(),
-            Some(StdError::generic_err("Unknown denom btc"))
+            result.err().unwrap().to_string(),
+            StdError::msg("Unknown denom btc").to_string()
         );
     }
 
     #[test]
     fn test_addition_with_overflow() {
         let mut map = BTreeMap::new();
-        map.insert("atom".to_string(), Uint128::new(u128::MAX));
+        map.insert("atom".to_string(), Uint256::MAX);
 
-        let balance = vec![("atom".to_string(), Uint128::new(1))];
+        let balance = vec![("atom".to_string(), Uint256::new(1))];
         let result = map.inplace_add(balance.iter().map(|(d, a)| (d, a)));
 
         assert_eq!(
-            result.err(),
-            Some(StdError::generic_err("Addition overflow for denom: atom"))
+            result.err().unwrap().to_string(),
+            StdError::msg("Addition overflow for denom: atom").to_string()
         );
 
-        assert_eq!(map.get("atom"), Some(&Uint128::new(u128::MAX)));
+        assert_eq!(map.get("atom"), Some(&Uint256::MAX));
     }
 
     #[test]
@@ -325,11 +322,11 @@ mod tests {
             ]
         );
 
-        assert_eq!(map.get("atom"), Some(&Uint128::new(100)));
-        assert_eq!(map.get("btc"), Some(&Uint128::new(50)));
-        assert_eq!(map.get("eth"), Some(&Uint128::new(200)));
-        assert_eq!(map.get("usd"), Some(&Uint128::new(150)));
-        assert_eq!(map.get("eur"), Some(&Uint128::new(75)));
+        assert_eq!(map.get("atom"), Some(&Uint256::new(100)));
+        assert_eq!(map.get("btc"), Some(&Uint256::new(50)));
+        assert_eq!(map.get("eth"), Some(&Uint256::new(200)));
+        assert_eq!(map.get("usd"), Some(&Uint256::new(150)));
+        assert_eq!(map.get("eur"), Some(&Uint256::new(75)));
     }
 
     #[test]
@@ -346,7 +343,10 @@ mod tests {
         assert!(result.is_err());
 
         if let Err(err) = result {
-            assert_eq!(err, StdError::generic_err("Duplicate denom found: btc"));
+            assert_eq!(
+                err.to_string(),
+                StdError::msg("Duplicate denom found: btc").to_string()
+            );
         }
     }
 

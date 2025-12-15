@@ -164,11 +164,11 @@ pub fn recover_pubkey_secp256k1(
 // Errors
 
 pub fn signature_error<T: std::fmt::Display>(err: &T) -> StdError {
-    StdError::generic_err(format!("Eth signature error {}", err))
+    StdError::msg(format!("Eth signature error {}", err))
 }
 
 pub fn addresses_error<T: std::fmt::Display>(err: &T) -> StdError {
-    StdError::generic_err(format!("Eth address error {}", err))
+    StdError::msg(format!("Eth address error {}", err))
 }
 
 #[cfg(test)]
@@ -296,7 +296,10 @@ mod tests {
 
         let fetch_address =
             cosmos_address_from_pubkey_secp256k1(&compressed_pubkey, "fetch").unwrap();
-        assert_eq!(fetch_address, expected_fetch_address);
+        assert_eq!(
+            fetch_address.to_string(),
+            expected_fetch_address.to_string()
+        );
     }
 
     #[test]

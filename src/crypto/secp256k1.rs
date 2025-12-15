@@ -37,5 +37,5 @@ pub fn to_compressed_key(pubkey: &[u8]) -> StdResult<CompressedPubkey> {
 
 // Error
 pub fn pubkey_error<T: std::fmt::Display>(err: &T) -> StdError {
-    StdError::generic_err(format!("Secp256k1 pubkey error {}", err))
+    StdError::msg(format!("Secp256k1 pubkey error {}", err))
 }

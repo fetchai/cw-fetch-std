@@ -25,5 +25,5 @@ pub fn ensure_super_admin(deps: &Deps, env: &Env, address: &Addr) -> StdResult<(
 }
 
 pub fn not_super_admin_error() -> StdError {
-    StdError::generic_err(ERR_NOT_SUPER_ADMIN)
+    StdError::msg(ERR_NOT_SUPER_ADMIN)
 }

@@ -12,5 +12,5 @@ pub fn ensure_private(env: &Env, address: &Addr) -> StdResult<()> {
 }
 
 pub fn not_self_contract_error() -> StdError {
-    StdError::generic_err(ERR_NOT_SELF_CONTRACT)
+    StdError::msg(ERR_NOT_SELF_CONTRACT)
 }
