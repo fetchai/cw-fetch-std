@@ -39,7 +39,7 @@ struct MyResponse {
 
 #[test]
 fn hybrid_derive_works_and_respects_snake_case() {
-    let map: BTreeMap<String, RootSchema> = <MyQuery as QueryResponses>::response_schemas_impl();
+    let map: BTreeMap<String, RootSchema> = <MyQuery as QueryResponses>::response_schemas();
 
     let keys: Vec<String> = map.keys().cloned().collect();
     assert!(keys.contains(&"my_field".to_string()));
