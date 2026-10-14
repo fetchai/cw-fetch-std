@@ -1,3 +1,6 @@
+// Lets macro-generated `::cw_fetch_std::...` paths resolve inside this crate too
+extern crate self as cw_fetch_std;
+
 pub mod access_control;
 pub mod balance;
 pub mod crypto;

@@ -1,3 +1,4 @@
+use crate::events::ResponseHandler;
 use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
 use cosmwasm_std::{
     to_json_binary, Addr, Empty, Env, OwnedDeps, SystemError, SystemResult, Uint256, WasmQuery,
@@ -65,4 +66,21 @@ pub fn mock_env_with_height(height: u64) -> Env {
     let mut env = mock_env();
     env.block.height = height;
     env
+}
+
+/// Flattens the events of a response into `(name, attributes)` for assertions.
+pub fn response_events(response_handler: ResponseHandler) -> Vec<(String, Vec<(String, String)>)> {
+    response_handler
+        .into_response()
+        .events
+        .into_iter()
+        .map(|event| {
+            let attributes = event
+                .attributes
+                .into_iter()
+                .map(|attribute| (attribute.key, attribute.value))
+                .collect();
+            (event.ty, attributes)
+        })
+        .collect()
 }
