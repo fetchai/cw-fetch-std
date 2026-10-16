@@ -28,6 +28,8 @@ use serde::Serialize;
 pub use evented_storage_macros::{evented_item, evented_map};
 
 type Attributes = Vec<(String, String)>;
+type KeyOutput<K> = <K as KeyDeserialize>::Output;
+type Records<'c, K, V> = Box<dyn Iterator<Item = StdResult<(K, V)>> + 'c>;
 
 struct StorageEvent {
     name: &'static str,
@@ -223,6 +225,49 @@ where
     }
 }
 
+/// Iteration over the entries of a composite key map that share a key prefix.
+/// The underlying `Prefix` is not exposed, as its `clear` would mutate without events.
+impl<'a, K, V, const N: usize> EventedMap<K, V, N>
+where
+    K: PrimaryKey<'a>,
+    K::Suffix: PrimaryKey<'a> + KeyDeserialize,
+    V: Serialize + DeserializeOwned,
+{
+    /// Entries whose key starts with `prefix`, yielding the remaining key (suffix).
+    /// The bounds apply to the suffix.
+    pub fn range_prefix<'c>(
+        &self,
+        storage: &'c dyn Storage,
+        prefix: K::Prefix,
+        min: Option<Bound<'a, K::Suffix>>,
+        max: Option<Bound<'a, K::Suffix>>,
+        order: Order,
+    ) -> Records<'c, KeyOutput<K::Suffix>, V>
+    where
+        V: 'c,
+        KeyOutput<K::Suffix>: 'static,
+    {
+        self.map.prefix(prefix).range(storage, min, max, order)
+    }
+
+    /// Keys starting with `prefix`, yielding the remaining key (suffix).
+    /// The bounds apply to the suffix.
+    pub fn keys_prefix<'c>(
+        &self,
+        storage: &'c dyn Storage,
+        prefix: K::Prefix,
+        min: Option<Bound<'a, K::Suffix>>,
+        max: Option<Bound<'a, K::Suffix>>,
+        order: Order,
+    ) -> Box<dyn Iterator<Item = StdResult<KeyOutput<K::Suffix>>> + 'c>
+    where
+        V: 'c,
+        KeyOutput<K::Suffix>: 'static,
+    {
+        self.map.prefix(prefix).keys(storage, min, max, order)
+    }
+}
+
 /// An `Item<V>` whose mutations emit events. Declare it with [`evented_item`].
 pub struct EventedItem<V> {
     item: Item<V>,
@@ -360,6 +405,9 @@ mod tests {
 
     #[evented_map(key = ("role", "address"))]
     const ROLES: Map<(&str, &Addr), ()> = Map::new("roles");
+
+    #[evented_map(key = ("id", "nonce"), value = "data")]
+    const NONCES: Map<(u64, u64), u32> = Map::new("nonces");
 
     #[evented_map(key = "id", value = "value")]
     const FLAKY_MAP: Map<u64, Flaky> = Map::new("flaky_map");
@@ -507,6 +555,49 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn prefix_iteration() {
+        let mut deps = mock_dependencies();
+        let storage = deps.as_mut().storage;
+        for (id, nonce) in [(2, 5), (1, 3), (2, 1), (3, 0), (2, 9)] {
+            NONCES
+                .update(
+                    storage,
+                    &mut ResponseHandler::default(),
+                    (id, nonce),
+                    &(nonce as u32 * 10),
+                )
+                .unwrap();
+        }
+
+        let keys = |min, max, order| {
+            NONCES
+                .keys_prefix(storage, 2, min, max, order)
+                .collect::<StdResult<Vec<_>>>()
+                .unwrap()
+        };
+        assert_eq!(keys(None, None, Order::Ascending), vec![1, 5, 9]);
+        assert_eq!(keys(None, None, Order::Descending), vec![9, 5, 1]);
+        assert_eq!(
+            keys(Some(Bound::exclusive(1u64)), None, Order::Ascending),
+            vec![5, 9]
+        );
+        assert_eq!(
+            keys(None, Some(Bound::exclusive(9u64)), Order::Descending),
+            vec![5, 1]
+        );
+
+        let entries: Vec<_> = NONCES
+            .range_prefix(storage, 1, None, None, Order::Ascending)
+            .collect::<StdResult<_>>()
+            .unwrap();
+        assert_eq!(entries, vec![(3, 30)]);
+        assert!(NONCES
+            .keys_prefix(storage, 4, None, None, Order::Ascending)
+            .next()
+            .is_none());
     }
 
     #[test]
